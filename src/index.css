@@ -1,0 +1,3000 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
+/* =========================================
+   GLOBAL
+   ========================================= */
+
+:root {
+  font-family: "DM Sans", sans-serif;
+
+  color: #171717;
+  background: #f4f4f2;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-width: 320px;
+  background: #f4f4f2;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+
+/* =========================================
+   UPLOAD PAGE
+   ========================================= */
+
+.upload-page {
+  min-height: 100vh;
+
+  display: flex;
+  justify-content: center;
+
+  background: #f5f5f3;
+}
+
+.upload-container {
+  width: min(100%, 900px);
+
+  padding: 32px 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  background: #181818;
+  color: white;
+
+  font-weight: 700;
+}
+
+.upload-card {
+  width: min(100%, 650px);
+
+  margin: 130px auto 0;
+  padding: 60px 40px;
+
+  text-align: center;
+
+  background: white;
+
+  border: 1px solid #e7e7e3;
+  border-radius: 22px;
+
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.06);
+}
+
+.upload-icon {
+  width: 64px;
+  height: 64px;
+
+  margin: 0 auto 24px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 16px;
+
+  background: #f0f0ed;
+}
+
+.upload-card h1 {
+  margin: 0;
+
+  font-size: clamp(
+    28px,
+    5vw,
+    42px
+  );
+
+  letter-spacing: -1.5px;
+}
+
+.upload-card p {
+  max-width: 500px;
+
+  margin: 16px auto 28px;
+
+  color: #707070;
+
+  line-height: 1.6;
+}
+
+.upload-button,
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 9px;
+
+  padding: 11px 17px;
+
+  border-radius: 9px;
+
+  background: #181818;
+  color: white;
+
+  font-weight: 600;
+
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.upload-button:hover,
+.primary-button:hover {
+  background: #303030;
+}
+
+.upload-button:active,
+.primary-button:active {
+  transform: translateY(1px);
+}
+
+.upload-button {
+  cursor: pointer;
+}
+
+.supported {
+  display: block;
+
+  margin-top: 14px;
+
+  color: #999;
+
+  font-size: 13px;
+}
+
+
+/* =========================================
+   APP
+   ========================================= */
+
+.app {
+  height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+
+/* =========================================
+   TOP BAR
+   ========================================= */
+
+.topbar {
+  height: 64px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 18px;
+
+  background: white;
+
+  border-bottom: 1px solid #e6e6e2;
+}
+
+.topbar-left,
+.topbar-right,
+.topbar-center {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-left {
+  gap: 12px;
+
+  min-width: 0;
+}
+
+.topbar-right {
+  gap: 9px;
+}
+
+.topbar-center {
+  gap: 4px;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 8px;
+
+  background: transparent;
+  color: #555;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.icon-button:hover {
+  background: #f2f2ef;
+  color: #111;
+}
+
+.document-title {
+  max-width: 300px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.document-title span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+.divider {
+  width: 1px;
+  height: 24px;
+
+  margin: 0 8px;
+
+  background: #e2e2df;
+}
+
+.zoom {
+  padding: 6px 10px;
+
+  font-size: 13px;
+
+  color: #666;
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 10px 14px;
+
+  border-radius: 9px;
+
+  background: #f0f0ed;
+  color: #222;
+
+  font-weight: 600;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.secondary-button:hover {
+  background: #e5e5e1;
+}
+
+
+/* =========================================
+   WORKSPACE
+   ========================================= */
+
+.workspace {
+  min-height: 0;
+
+  flex: 1;
+
+  display: grid;
+
+  grid-template-columns:
+    190px
+    minmax(0, 1fr)
+    230px;
+}
+
+
+/* =========================================
+   SIDE BARS
+   ========================================= */
+
+.sidebar,
+.properties {
+  background: white;
+
+  padding: 20px 14px;
+}
+
+.sidebar {
+  border-right: 1px solid #e6e6e2;
+}
+
+.properties {
+  border-left: 1px solid #e6e6e2;
+
+  overflow-y: auto;
+}
+
+.sidebar-heading {
+  padding: 0 8px;
+
+  margin-bottom: 14px;
+
+  font-size: 10px;
+
+  font-weight: 700;
+
+  letter-spacing: 1.3px;
+
+  color: #999;
+}
+
+
+/* =========================================
+   TOOLBAR
+   ========================================= */
+
+.tools {
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.tool {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 11px 10px;
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: #555;
+
+  text-align: left;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.tool:hover {
+  background: #f4f4f1;
+
+  color: #111;
+}
+
+.tool-active {
+  background: #ededeb;
+
+  color: #111;
+
+  font-weight: 600;
+}
+
+
+/* =========================================
+   CANVAS
+   ========================================= */
+
+.canvas-area {
+  min-width: 0;
+  min-height: 0;
+
+  overflow: auto;
+
+  padding: 45px;
+
+  background: #e9e9e6;
+
+  overscroll-behavior: contain;
+}
+
+.document-page {
+  width: min(100%, 850px);
+
+  min-height: 1060px;
+
+  margin: 0 auto;
+
+  background: transparent;
+}
+
+
+/* =========================================
+   DOCUMENT PLACEHOLDER
+   ========================================= */
+
+.document-placeholder {
+  min-height: 1060px;
+
+  display: grid;
+  place-items: center;
+
+  align-content: center;
+
+  padding: 40px;
+
+  text-align: center;
+
+  color: #aaa;
+
+  background: white;
+
+  box-shadow:
+    0 4px 25px rgba(0, 0, 0, 0.1);
+}
+
+.document-placeholder h2 {
+  max-width: 500px;
+
+  margin: 18px auto 6px;
+
+  color: #444;
+
+  font-size: 18px;
+}
+
+.document-placeholder p {
+  margin: 0 0 5px;
+}
+
+.document-placeholder span {
+  font-size: 13px;
+}
+
+
+/* =========================================
+   PDF DOCUMENT
+   ========================================= */
+
+.pdf-document {
+  width: 100%;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+
+  width: fit-content;
+  max-width: 100%;
+
+  margin: 0 auto 28px;
+
+  background: white;
+
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.pdf-page-wrapper canvas {
+  display: block;
+
+  max-width: 100%;
+}
+
+.pdf-page-text-mode {
+  cursor: text;
+}
+
+
+/* =========================================
+   PDF FIELD LAYER
+   ========================================= */
+
+.field-layer {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 5;
+
+  pointer-events: none;
+}
+
+
+/* =========================================
+   TEXT FIELD
+   ========================================= */
+
+.document-field {
+  position: absolute;
+
+  display: flex;
+  align-items: flex-start;
+
+  pointer-events: auto;
+
+  min-width: 180px;
+
+  border: 1px solid transparent;
+  border-radius: 4px;
+
+  background: rgba(
+    255,
+    255,
+    255,
+    0.96
+  );
+
+  cursor: move;
+
+  user-select: none;
+
+  touch-action: none;
+
+  box-sizing: border-box;
+
+  overflow: visible;
+
+  z-index: 20;
+
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.document-field:hover {
+  border-color: #b5b5b0;
+}
+
+.document-field-selected {
+  border: 1px solid #181818;
+
+  box-shadow:
+    0 0 0 2px
+      rgba(24, 24, 24, 0.08);
+}
+
+
+/* =========================================
+   TEXTAREA
+   ========================================= */
+
+.document-field textarea {
+  display: block;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+
+  height: 100%;
+
+  box-sizing: border-box;
+
+  margin: 0;
+
+  padding: 7px 10px;
+
+  border: 0;
+
+  outline: none;
+
+  background: transparent;
+
+  color: #181818;
+
+  font-family: inherit;
+
+  font-size: 16px;
+
+  font-weight: 400;
+
+  line-height: 1.4;
+
+  resize: none;
+
+  cursor: text;
+
+  user-select: text;
+
+  white-space: pre-wrap;
+
+  overflow-wrap: anywhere;
+
+  word-break: break-word;
+
+  overflow: hidden;
+}
+
+.document-field textarea::placeholder {
+  color: #999;
+
+  opacity: 1;
+}
+
+.document-field textarea:focus {
+  outline: none;
+}
+
+.document-field-selected textarea {
+  background: rgba(
+    255,
+    255,
+    255,
+    0.35
+  );
+}
+
+
+/* =========================================
+   RESIZE HANDLES
+   ========================================= */
+
+.field-resize-handle {
+  position: absolute;
+
+  z-index: 40;
+
+  background: transparent;
+
+  touch-action: none;
+}
+
+
+/*
+ * Right side
+ *
+ * Drag horizontally to change width.
+ */
+
+.field-resize-right {
+  top: 6px;
+  right: -5px;
+  bottom: 6px;
+
+  width: 10px;
+
+  cursor: ew-resize;
+}
+
+
+/*
+ * Bottom side
+ *
+ * Drag vertically to change height.
+ */
+
+.field-resize-bottom {
+  left: 6px;
+  right: 6px;
+  bottom: -5px;
+
+  height: 10px;
+
+  cursor: ns-resize;
+}
+
+
+/*
+ * Bottom-right corner
+ *
+ * Drag diagonally to change both
+ * width and height.
+ */
+
+.field-resize-corner {
+  right: -6px;
+  bottom: -6px;
+
+  width: 14px;
+  height: 14px;
+
+  cursor: nwse-resize;
+}
+
+
+/*
+ * Small visual indicator for the
+ * bottom-right resize handle.
+ */
+
+.field-resize-corner::after {
+  content: "";
+
+  position: absolute;
+
+  right: 1px;
+  bottom: 1px;
+
+  width: 7px;
+  height: 7px;
+
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+
+  opacity: 0;
+
+  transition: opacity 0.12s ease;
+}
+
+.document-field-selected
+  .field-resize-corner::after {
+  opacity: 0.65;
+}
+
+
+/*
+ * Make resize handles slightly
+ * easier to hit on touch devices.
+ */
+
+@media (pointer: coarse) {
+  .field-resize-right {
+    right: -8px;
+
+    width: 16px;
+  }
+
+  .field-resize-bottom {
+    bottom: -8px;
+
+    height: 16px;
+  }
+
+  .field-resize-corner {
+    right: -9px;
+    bottom: -9px;
+
+    width: 20px;
+    height: 20px;
+  }
+
+  .field-resize-corner::after {
+    width: 9px;
+    height: 9px;
+  }
+}
+
+
+/* =========================================
+   TEXT MEASUREMENT
+   ========================================= */
+
+.text-measure {
+  position: fixed;
+
+  left: -99999px;
+  top: -99999px;
+
+  visibility: hidden;
+
+  box-sizing: border-box;
+
+  padding: 7px 10px;
+
+  font-family: inherit;
+
+  font-size: 16px;
+
+  font-weight: 400;
+
+  line-height: 1.4;
+
+  white-space: pre-wrap;
+
+  overflow-wrap: anywhere;
+
+  word-break: break-word;
+
+  pointer-events: none;
+
+  width: 180px;
+
+  min-height: 36px;
+}
+
+
+/* =========================================
+   DELETE FIELD
+   ========================================= */
+
+.field-delete {
+  position: absolute;
+
+  top: -10px;
+  right: -10px;
+
+  width: 20px;
+  height: 20px;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  border: 0;
+
+  border-radius: 50%;
+
+  background: #181818;
+
+  color: white;
+
+  font-size: 14px;
+
+  font-weight: 500;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+  z-index: 30;
+
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
+}
+
+.field-delete:hover {
+  transform: scale(1.08);
+
+  background: #000;
+}
+
+
+/* =========================================
+   PDF LOADING
+   ========================================= */
+
+.pdf-loading {
+  min-height: 500px;
+
+  display: grid;
+  place-items: center;
+
+  color: #888;
+
+  font-size: 14px;
+}
+
+
+/* =========================================
+   PROPERTIES PANEL
+   ========================================= */
+
+.empty-properties {
+  padding: 35px 12px;
+
+  text-align: center;
+
+  color: #aaa;
+}
+
+.empty-properties p {
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+.selected-tool {
+  padding: 10px;
+}
+
+.selected-icon {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 14px;
+
+  border-radius: 10px;
+
+  background: #f0f0ed;
+}
+
+.selected-tool h3 {
+  margin: 0 0 7px;
+
+  font-size: 15px;
+}
+
+.selected-tool p {
+  margin: 0;
+
+  color: #888;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+.property-delete {
+  width: 100%;
+
+  margin-top: 20px;
+
+  padding: 10px 12px;
+
+  border: 1px solid #deded9;
+
+  border-radius: 8px;
+
+  background: white;
+
+  color: #333;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.property-delete:hover {
+  background: #f4f4f1;
+
+  border-color: #cfcfca;
+}
+
+
+/* =========================================
+   RESPONSIVE — TABLET
+   ========================================= */
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns:
+      175px
+      minmax(0, 1fr)
+      210px;
+  }
+
+  .canvas-area {
+    padding: 30px;
+  }
+
+  .document-title {
+    max-width: 220px;
+  }
+}
+
+
+/* =========================================
+   RESPONSIVE — SMALL TABLET
+   ========================================= */
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns:
+      170px
+      minmax(0, 1fr);
+  }
+
+  .properties {
+    display: none;
+  }
+
+  .canvas-area {
+    padding: 30px;
+  }
+
+  .pdf-page-wrapper {
+    max-width: 100%;
+  }
+
+  .pdf-page-wrapper canvas {
+    max-width: 100%;
+  }
+
+  .document-title {
+    max-width: 180px;
+  }
+}
+
+
+/* =========================================
+   RESPONSIVE — MOBILE
+   ========================================= */
+
+@media (max-width: 650px) {
+  .topbar {
+    height: 64px;
+
+    padding: 0 10px;
+  }
+
+  .topbar-center {
+    display: none;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .secondary-button {
+    display: none;
+  }
+
+  .document-title {
+    max-width: 160px;
+
+    font-size: 14px;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .canvas-area {
+    height: calc(100vh - 64px);
+
+    padding:
+      20px
+      10px
+      90px;
+  }
+
+  .sidebar {
+    position: fixed;
+
+    z-index: 100;
+
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    height: 70px;
+
+    padding: 7px;
+
+    border-right: 0;
+
+    border-top: 1px solid #e6e6e2;
+  }
+
+  .sidebar-heading {
+    display: none;
+  }
+
+  .tools {
+    height: 100%;
+
+    flex-direction: row;
+
+    justify-content: space-around;
+
+    gap: 2px;
+  }
+
+  .tool {
+    width: auto;
+
+    flex: 1;
+
+    min-width: 45px;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    gap: 3px;
+
+    padding: 5px 3px;
+
+    font-size: 10px;
+  }
+
+  .document-page {
+    min-height: 700px;
+  }
+
+  .pdf-page-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pdf-page-wrapper canvas {
+    max-width: 100%;
+  }
+
+  .document-field {
+    min-width: 150px;
+  }
+
+  .document-field textarea {
+    padding: 6px 8px;
+
+    font-size: 14px;
+
+    line-height: 1.4;
+  }
+
+  .text-measure {
+    font-size: 14px;
+
+    line-height: 1.4;
+
+    padding:
+      6px
+      8px;
+  }
+
+  .field-delete {
+    top: -10px;
+    right: -10px;
+
+    width: 20px;
+    height: 20px;
+  }
+
+  .upload-container {
+    padding: 22px 16px;
+  }
+
+  .upload-card {
+    margin-top: 80px;
+
+    padding: 40px 22px;
+  }
+
+  .upload-card h1 {
+    font-size: 30px;
+  }
+}
+
+
+/* =========================================
+   VERY SMALL PHONES
+   ========================================= */
+
+@media (max-width: 400px) {
+  .canvas-area {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .document-title {
+    max-width: 125px;
+  }
+
+  .icon-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .tool {
+    min-width: 40px;
+
+    font-size: 9px;
+  }
+
+  .document-field {
+    min-width: 140px;
+  }
+}
+
+
+/* =========================================
+   REDUCED MOTION
+   ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+ /* =========================================
+    SIGNATURE FIELD
+    ========================================= */
+
+.signature-field {
+  position: absolute;
+
+  min-width: 120px;
+  min-height: 60px;
+
+  display: flex;
+  align-items: stretch;
+
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  background: rgba(
+    255,
+    255,
+    255,
+    0.96
+  );
+
+  cursor: move;
+
+  user-select: none;
+
+  touch-action: none;
+
+  overflow: visible;
+
+  z-index: 25;
+
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.signature-field:hover {
+  border-color: #b5b5b0;
+}
+
+.signature-field-selected {
+  border: 1px solid #181818;
+
+  box-shadow:
+    0 0 0 2px
+      rgba(24, 24, 24, 0.08);
+}
+
+
+/* =========================================
+   SIGNATURE CONTROLS
+   ========================================= */
+
+.signature-controls {
+  position: absolute;
+
+  left: 50%;
+  top: -42px;
+
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+
+  gap: 3px;
+
+  padding: 4px;
+
+  border: 1px solid #deded9;
+  border-radius: 8px;
+
+  background: white;
+
+  box-shadow:
+    0 5px 18px rgba(
+      0,
+      0,
+      0,
+      0.1
+    );
+
+  z-index: 100;
+
+  white-space: nowrap;
+}
+
+.signature-controls button,
+.signature-controls label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 48px;
+
+  padding: 6px 9px;
+
+  border-radius: 5px;
+
+  background: transparent;
+
+  color: #666;
+
+  font-size: 11px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.signature-controls button:hover,
+.signature-controls label:hover {
+  background: #f2f2ef;
+
+  color: #181818;
+}
+
+.signature-controls
+  .signature-mode-active {
+  background: #181818;
+
+  color: white;
+}
+
+.signature-controls
+  .signature-mode-active:hover {
+  background: #303030;
+
+  color: white;
+}
+
+.signature-controls input {
+  display: none;
+}
+
+
+/* =========================================
+   SIGNATURE DRAW
+   ========================================= */
+
+.signature-draw-area {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  border-radius: 5px;
+}
+
+.signature-canvas {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  background: transparent;
+
+  cursor: crosshair;
+
+  touch-action: none;
+}
+
+.signature-placeholder {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(
+    -50%,
+    -50%
+  );
+
+  color: #aaa;
+
+  font-size: 13px;
+
+  pointer-events: none;
+
+  white-space: nowrap;
+}
+
+.signature-clear {
+  position: absolute;
+
+  right: 7px;
+  bottom: 7px;
+
+  padding: 5px 8px;
+
+  border: 1px solid #deded9;
+  border-radius: 5px;
+
+  background: white;
+
+  color: #555;
+
+  font-size: 11px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+
+  z-index: 10;
+}
+
+.signature-clear:hover {
+  background: #f3f3f0;
+
+  color: #181818;
+}
+
+
+/* =========================================
+   SIGNATURE TYPE
+   ========================================= */
+
+.signature-type-area {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+
+  padding: 12px;
+
+  overflow: hidden;
+}
+
+.signature-type-area input {
+  width: 100%;
+
+  padding: 8px 4px;
+
+  border: 0;
+  border-bottom: 1px solid #d8d8d3;
+
+  outline: none;
+
+  background: transparent;
+
+  color: #181818;
+
+  font-size: 32px;
+
+  line-height: 1;
+
+  cursor: text;
+
+  user-select: text;
+}
+
+.signature-type-area input:focus {
+  border-bottom-color: #181818;
+}
+
+.signature-type-area
+  .signature-placeholder {
+  pointer-events: none;
+}
+
+
+/* =========================================
+   SIGNATURE UPLOAD
+   ========================================= */
+
+.signature-upload-area {
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 12px;
+
+  overflow: hidden;
+}
+
+.signature-upload-label {
+  min-width: 150px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 12px 16px;
+
+  border: 1px dashed #c9c9c4;
+  border-radius: 7px;
+
+  background: #fafaf8;
+
+  color: #777;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.signature-upload-label:hover {
+  border-color: #999;
+
+  background: #f4f4f1;
+
+  color: #333;
+}
+
+.signature-upload-label input {
+  display: none;
+}
+
+.signature-image {
+  display: block;
+
+  max-width: 100%;
+  max-height: 100%;
+
+  object-fit: contain;
+
+  user-select: none;
+
+  pointer-events: none;
+}
+
+
+/* =========================================
+   SIGNATURE RESIZE HANDLES
+   ========================================= */
+
+.signature-resize-handle {
+  position: absolute;
+
+  z-index: 50;
+
+  background: transparent;
+
+  touch-action: none;
+}
+
+.signature-resize-right {
+  top: 6px;
+  right: -5px;
+  bottom: 6px;
+
+  width: 10px;
+
+  cursor: ew-resize;
+}
+
+.signature-resize-bottom {
+  left: 6px;
+  right: 6px;
+  bottom: -5px;
+
+  height: 10px;
+
+  cursor: ns-resize;
+}
+
+.signature-resize-corner {
+  right: -6px;
+  bottom: -6px;
+
+  width: 14px;
+  height: 14px;
+
+  cursor: nwse-resize;
+}
+
+.signature-resize-corner::after {
+  content: "";
+
+  position: absolute;
+
+  right: 1px;
+  bottom: 1px;
+
+  width: 7px;
+  height: 7px;
+
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+
+  opacity: 0.65;
+}
+
+
+/* =========================================
+   SIGNATURE — TOUCH DEVICES
+   ========================================= */
+
+@media (pointer: coarse) {
+  .signature-resize-right {
+    right: -8px;
+
+    width: 16px;
+  }
+
+  .signature-resize-bottom {
+    bottom: -8px;
+
+    height: 16px;
+  }
+
+  .signature-resize-corner {
+    right: -9px;
+    bottom: -9px;
+
+    width: 20px;
+    height: 20px;
+  }
+}
+
+
+/* =========================================
+   SIGNATURE — MOBILE
+   ========================================= */
+
+@media (max-width: 650px) {
+  .signature-controls {
+    top: -40px;
+
+    max-width: calc(100vw - 30px);
+
+    overflow-x: auto;
+  }
+
+  .signature-controls button,
+  .signature-controls label {
+    min-width: 44px;
+
+    padding: 6px 7px;
+
+    font-size: 10px;
+  }
+
+  .signature-type-area input {
+    font-size: 24px;
+  }
+}
+
+/* =========================================
+   CLEAR SIGNATURE DELETE BUTTON
+   ========================================= */
+
+.signature-delete-button {
+  width: 18px !important;
+  height: 24px !important;
+  min-width: 18px !important;
+  min-height: 24px !important;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
+  margin-left: 3px;
+
+  padding: 0 !important;
+
+  border: 1px solid #181818 !important;
+  border-radius: 6px !important;
+
+  background: #181818 !important;
+  color: #ffffff !important;
+
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.signature-delete-button:hover {
+  background: #000000 !important;
+  border-color: #000000 !important;
+  transform: scale(1.05);
+}
+
+.signature-delete-button:active {
+  transform: scale(0.95);
+}
+
+.signature-delete-button:focus-visible {
+  outline: 2px solid #181818;
+  outline-offset: 2px;
+}
+
+/* Make the delete button easy to use on touch screens */
+@media (pointer: coarse) {
+}
+
+/* =========================================
+   DATE FIELD
+   ========================================= */
+
+.date-field {
+  position: absolute;
+  min-width: 130px;
+  min-height: 36px;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  overflow: visible;
+  z-index: 25;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.date-field:hover {
+  border-color: #b5b5b0;
+}
+
+.date-field-selected {
+  border: 1px solid #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+}
+
+.date-field-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  overflow: hidden;
+}
+
+.date-field-content input {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+
+  border: 0;
+  outline: none;
+  background: transparent;
+
+  padding: 5px 7px;
+
+  color: #181818;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: text;
+}
+
+/* =========================================
+   DATE CONTROLS
+   ========================================= */
+
+.date-controls {
+  position: absolute;
+
+  left: 50%;
+  top: -42px;
+
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  padding: 4px;
+
+  border: 1px solid #d8d8d3;
+  border-radius: 7px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1);
+
+  z-index: 100;
+}
+
+.date-control-label {
+  padding: 0 7px;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #181818;
+}
+
+/* =========================================
+   DATE DELETE BUTTON
+   ========================================= */
+
+.date-delete-button {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
+  margin-left: 2px;
+
+  padding: 0 !important;
+
+  border: 1px solid #181818 !important;
+  border-radius: 6px !important;
+
+  background: #181818 !important;
+  color: #ffffff !important;
+
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.date-delete-button:hover {
+  background: #000000 !important;
+  transform: scale(1.05);
+}
+
+.date-delete-button:active {
+  transform: scale(0.95);
+}
+
+/* =========================================
+   DATE RESIZE HANDLES
+   ========================================= */
+
+.date-resize-handle {
+  position: absolute;
+
+  display: block;
+
+  z-index: 200;
+
+  background: transparent;
+
+  touch-action: none;
+
+  user-select: none;
+}
+
+/*
+ * Right edge.
+ */
+.date-resize-right {
+  top: -4px;
+  right: -7px;
+  bottom: -4px;
+
+  width: 14px;
+
+  cursor: ew-resize;
+}
+
+/*
+ * Bottom edge.
+ */
+.date-resize-bottom {
+  left: -4px;
+  right: -4px;
+  bottom: -7px;
+
+  height: 14px;
+
+  cursor: ns-resize;
+}
+
+/*
+ * Bottom-right corner.
+ */
+.date-resize-corner {
+  right: -8px;
+  bottom: -8px;
+
+  width: 18px;
+  height: 18px;
+
+  cursor: nwse-resize;
+}
+
+/*
+ * Give the corner a subtle visual indicator
+ * when the field is selected.
+ */
+.date-field-selected
+  .date-resize-corner::after {
+  content: "";
+
+  position: absolute;
+
+  right: 3px;
+  bottom: 3px;
+
+  width: 8px;
+  height: 8px;
+
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+
+  border-radius: 1px;
+}
+
+/* =========================================
+   TOUCH DEVICES
+   ========================================= */
+
+@media (pointer: coarse) {
+  .date-resize-right {
+    right: -10px;
+    width: 20px;
+  }
+
+  .date-resize-bottom {
+    bottom: -10px;
+    height: 20px;
+  }
+
+  .date-resize-corner {
+    right: -11px;
+    bottom: -11px;
+    width: 24px;
+    height: 24px;
+  }
+
+}
+
+/* =========================================
+   CHECKBOX FIELD
+   ========================================= */
+
+.checkbox-field {
+  position: absolute;
+  min-width: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  overflow: visible;
+  z-index: 50;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.checkbox-field:hover {
+  border-color: #b5b5b0;
+}
+
+.checkbox-field-selected {
+  border: 1px solid #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+  z-index: 60;
+}
+
+/* =========================================
+   CHECKBOX BODY
+   ========================================= */
+
+.checkbox-drag-area {
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  pointer-events: auto;
+
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.checkbox-button {
+  width: 100%;
+  height: 100%;
+  min-width: 24px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid #181818;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #ffffff;
+  cursor: pointer;
+  outline: none;
+  pointer-events: auto;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.1s ease;
+}
+
+.checkbox-button:hover {
+  background: #f4f4f1;
+}
+
+.checkbox-button:active {
+  transform: scale(0.96);
+}
+
+.checkbox-button-checked {
+  background: #181818;
+  border-color: #181818;
+}
+
+.checkbox-button-checked:hover {
+  background: #000000;
+  border-color: #000000;
+}
+
+.checkbox-button:focus-visible {
+  outline: 2px solid #181818;
+  outline-offset: 2px;
+}
+
+/* =========================================
+   CONTROLS
+   ========================================= */
+
+.checkbox-controls {
+  position: absolute;
+  left: 50%;
+  top: -42px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8d8d3;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 300;
+  pointer-events: auto;
+}
+
+.checkbox-control-label {
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #181818;
+  white-space: nowrap;
+}
+
+/* =========================================
+   DELETE
+   ========================================= */
+
+.checkbox-delete-button {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0 !important;
+  border: 1px solid #181818 !important;
+  border-radius: 6px !important;
+  background: #181818 !important;
+  color: #ffffff !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  pointer-events: auto !important;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.checkbox-delete-button:hover {
+  background: #000000 !important;
+  transform: scale(1.05);
+}
+
+.checkbox-delete-button:active {
+  transform: scale(0.95);
+}
+
+.checkbox-delete-button:focus-visible {
+  outline: 2px solid #181818;
+  outline-offset: 2px;
+}
+
+/* =========================================
+   RESIZE HANDLES
+   ========================================= */
+
+.checkbox-resize-handle {
+  position: absolute;
+  display: block;
+  z-index: 400;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.checkbox-resize-right {
+  top: -6px;
+  right: -9px;
+  bottom: -6px;
+  width: 18px;
+  cursor: ew-resize;
+}
+
+.checkbox-resize-bottom {
+  left: -6px;
+  right: -6px;
+  bottom: -9px;
+  height: 18px;
+  cursor: ns-resize;
+}
+
+.checkbox-resize-corner {
+  right: -10px;
+  bottom: -10px;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+}
+
+.checkbox-field-selected
+  .checkbox-resize-corner::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+  border-radius: 1px;
+}
+
+/* =========================================
+   TOUCH
+   ========================================= */
+
+@media (pointer: coarse) {
+  .checkbox-resize-right {
+    right: -11px;
+    width: 22px;
+  }
+
+  .checkbox-resize-bottom {
+    bottom: -11px;
+    height: 22px;
+  }
+
+  .checkbox-resize-corner {
+    right: -13px;
+    bottom: -13px;
+    width: 28px;
+    height: 28px;
+  }
+
+}
+
+.name-field {
+  position: absolute;
+  min-width: 80px;
+  min-height: 32px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  overflow: visible;
+  z-index: 50;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.name-field:hover {
+  border-color: #b5b5b0;
+}
+
+.name-field-selected {
+  border: 1px solid #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+  z-index: 60;
+}
+
+.name-input-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+.name-input {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid #9d9d98;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #181818;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  outline: none;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.name-input::placeholder {
+  color: #8b8b86;
+  opacity: 1;
+}
+
+.name-input:hover {
+  border-color: #6f6f6a;
+}
+
+.name-input:focus,
+.name-input-editing {
+  border-color: #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+}
+
+.name-controls {
+  position: absolute;
+  left: 50%;
+  top: -42px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8d8d3;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 300;
+  pointer-events: auto;
+}
+
+.name-control-label {
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #181818;
+  white-space: nowrap;
+}
+
+.name-delete-button {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0 !important;
+  border: 1px solid #181818 !important;
+  border-radius: 6px !important;
+  background: #181818 !important;
+  color: #ffffff !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  pointer-events: auto !important;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.name-delete-button:hover {
+  background: #000000 !important;
+  transform: scale(1.05);
+}
+
+.name-delete-button:active {
+  transform: scale(0.95);
+}
+
+.name-delete-button:focus-visible {
+  outline: 2px solid #181818;
+  outline-offset: 2px;
+}
+
+.name-resize-handle {
+  position: absolute;
+  display: block;
+  z-index: 400;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.name-resize-right {
+  top: -6px;
+  right: -9px;
+  bottom: -6px;
+  width: 18px;
+  cursor: ew-resize;
+}
+
+.name-resize-bottom {
+  left: -6px;
+  right: -6px;
+  bottom: -9px;
+  height: 18px;
+  cursor: ns-resize;
+}
+
+.name-resize-corner {
+  right: -10px;
+  bottom: -10px;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+}
+
+.name-field-selected
+  .name-resize-corner::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+  border-radius: 1px;
+}
+
+@media (pointer: coarse) {
+  .name-resize-right {
+    right: -11px;
+    width: 22px;
+  }
+
+  .name-resize-bottom {
+    bottom: -11px;
+    height: 22px;
+  }
+
+  .name-resize-corner {
+    right: -13px;
+    bottom: -13px;
+    width: 28px;
+    height: 28px;
+  }
+
+}
+
+.email-field {
+  position: absolute;
+  min-width: 120px;
+  min-height: 32px;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  pointer-events: auto;
+  overflow: visible;
+  z-index: 50;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.email-field:hover {
+  border-color: #b5b5b0;
+}
+
+.email-field-selected {
+  border: 1px solid #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+  z-index: 60;
+}
+
+.email-input-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+.email-input {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid #9d9d98;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #181818;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  outline: none;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.email-input::placeholder {
+  color: #8b8b86;
+  opacity: 1;
+}
+
+.email-input:hover {
+  border-color: #6f6f6a;
+}
+
+.email-input:focus,
+.email-input-editing {
+  border-color: #181818;
+  box-shadow:
+    0 0 0 2px rgba(24, 24, 24, 0.08);
+}
+
+.email-controls {
+  position: absolute;
+  left: 50%;
+  top: -42px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8d8d3;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 300;
+  pointer-events: auto;
+}
+
+.email-control-label {
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #181818;
+  white-space: nowrap;
+}
+
+.email-delete-button {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  padding: 0 !important;
+  border: 1px solid #181818 !important;
+  border-radius: 6px !important;
+  background: #181818 !important;
+  color: #ffffff !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  pointer-events: auto !important;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.email-delete-button:hover {
+  background: #000000 !important;
+  transform: scale(1.05);
+}
+
+.email-delete-button:active {
+  transform: scale(0.95);
+}
+
+.email-delete-button:focus-visible {
+  outline: 2px solid #181818;
+  outline-offset: 2px;
+}
+
+.email-resize-handle {
+  position: absolute;
+  display: block;
+  z-index: 400;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.email-resize-right {
+  top: -6px;
+  right: -9px;
+  bottom: -6px;
+  width: 18px;
+  cursor: ew-resize;
+}
+
+.email-resize-bottom {
+  left: -6px;
+  right: -6px;
+  bottom: -9px;
+  height: 18px;
+  cursor: ns-resize;
+}
+
+.email-resize-corner {
+  right: -10px;
+  bottom: -10px;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+}
+
+.email-field-selected
+  .email-resize-corner::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #181818;
+  border-bottom: 2px solid #181818;
+  border-radius: 1px;
+}
+
+@media (pointer: coarse) {
+  .email-resize-right {
+    right: -11px;
+    width: 22px;
+  }
+
+  .email-resize-bottom {
+    bottom: -11px;
+    height: 22px;
+  }
+
+  .email-resize-corner {
+    right: -13px;
+    bottom: -13px;
+    width: 28px;
+    height: 28px;
+  }
+
+}
+
+/* =========================================
+   IMAGE DOCUMENT EDITOR
+   ========================================= */
+
+.image-document {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+.image-page-wrapper {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  line-height: 0;
+  background: #ffffff;
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.image-page-field-mode {
+  cursor: crosshair;
+}
+
+.image-document-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 150px);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-field-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  line-height: normal;
+}
+
+.image-field-layer > * {
+  pointer-events: auto;
+}
+
+.image-loading {
+  width: 100%;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6f6f6a;
+  font-size: 14px;
+}
+
+/* =========================================
+   IMAGE EDITOR RESPONSIVE
+   ========================================= */
+
+@media (max-width: 1200px) {
+  .image-document {
+    padding: 20px;
+  }
+
+  .image-document-image {
+    max-height: calc(100vh - 170px);
+  }
+}
+
+@media (max-width: 900px) {
+  .image-document {
+    padding: 16px;
+  }
+
+  .image-document-image {
+    max-height: calc(100vh - 190px);
+  }
+}
+
+@media (max-width: 600px) {
+  .image-document {
+    padding: 10px;
+  }
+
+  .image-document-image {
+    max-height: calc(100vh - 200px);
+  }
+}
+
+
+/* =========================================
+   DOCX VIEWER
+   ========================================= */
+
+.docx-viewer {
+  width: 100%;
+  min-height: 1060px;
+}
+
+.docx-page {
+  position: relative;
+
+  width: min(100%, 850px);
+  min-height: 1060px;
+
+  margin: 0 auto;
+
+  padding: 72px 72px 90px;
+
+  background: white;
+
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12);
+
+  box-sizing: border-box;
+
+  overflow: visible;
+}
+
+.docx-page-field-mode {
+  cursor: text;
+}
+
+.docx-content {
+  position: relative;
+
+  width: 100%;
+
+  color: #181818;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  font-size: 16px;
+
+  line-height: 1.55;
+
+  overflow-wrap: anywhere;
+}
+
+.docx-content h1,
+.docx-content h2,
+.docx-content h3,
+.docx-content h4,
+.docx-content h5,
+.docx-content h6 {
+  color: #181818;
+
+  margin-top: 1.2em;
+  margin-bottom: 0.55em;
+
+  line-height: 1.25;
+}
+
+.docx-content h1 {
+  font-size: 30px;
+}
+
+.docx-content h2 {
+  font-size: 25px;
+}
+
+.docx-content h3 {
+  font-size: 21px;
+}
+
+.docx-content p {
+  margin: 0 0 12px;
+}
+
+.docx-content ul,
+.docx-content ol {
+  margin-top: 0;
+  margin-bottom: 14px;
+
+  padding-left: 28px;
+}
+
+.docx-content li {
+  margin-bottom: 4px;
+}
+
+.docx-content table {
+  width: 100%;
+
+  margin: 16px 0;
+
+  border-collapse: collapse;
+
+  table-layout: fixed;
+}
+
+.docx-content td,
+.docx-content th {
+  padding: 7px 9px;
+
+  border: 1px solid #cfcfca;
+
+  vertical-align: top;
+
+  overflow-wrap: anywhere;
+}
+
+.docx-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.docx-content a {
+  color: inherit;
+}
+
+.docx-content blockquote {
+  margin: 16px 0;
+  padding-left: 16px;
+
+  border-left: 3px solid #d7d7d2;
+
+  color: #555;
+}
+
+.docx-field-layer {
+  pointer-events: none;
+}
+
+.docx-loading {
+  min-height: 500px;
+
+  display: grid;
+  place-items: center;
+
+  color: #888;
+
+  font-size: 14px;
+}
+
+.docx-error {
+  min-height: 500px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  padding: 40px;
+
+  text-align: center;
+
+  background: white;
+
+  color: #777;
+
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.docx-error strong {
+  color: #333;
+}
+
+@media (max-width: 900px) {
+  .docx-page {
+    padding: 58px 52px 72px;
+  }
+}
+
+@media (max-width: 650px) {
+  .docx-viewer {
+    min-height: 700px;
+  }
+
+  .docx-page {
+    width: 100%;
+    min-height: 700px;
+
+    padding:
+      38px
+      28px
+      70px;
+  }
+
+  .docx-content {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .docx-content h1 {
+    font-size: 26px;
+  }
+
+  .docx-content h2 {
+    font-size: 22px;
+  }
+
+  .docx-content h3 {
+    font-size: 19px;
+  }
+
+  .docx-content table {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 400px) {
+  .docx-page {
+    padding:
+      28px
+      18px
+      60px;
+  }
+
+  .docx-content {
+    font-size: 13px;
+  }
+}
+
