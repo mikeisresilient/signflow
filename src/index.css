@@ -2998,3 +2998,534 @@ textarea:focus-visible {
   }
 }
 
+
+/* =========================================
+   SIGNFLOW RESPONSIVE PASS — 2026
+   =========================================
+
+   This layer improves the existing editor without
+   changing document coordinate logic or field behavior.
+*/
+
+/* Prevent horizontal page overflow while keeping the editor canvas scrollable. */
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.app {
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+}
+
+.topbar,
+.workspace {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.topbar-left,
+.topbar-right,
+.topbar-center {
+  min-width: 0;
+}
+
+.topbar-left {
+  flex: 1 1 auto;
+}
+
+.topbar-right {
+  flex: 0 0 auto;
+}
+
+.document-title {
+  min-width: 0;
+}
+
+.canvas-area {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.document-page {
+  min-width: 0;
+}
+
+/* Keep document pages visually centered without forcing horizontal overflow. */
+.pdf-document,
+.docx-viewer,
+.image-document {
+  min-width: 0;
+}
+
+.pdf-page-wrapper,
+.docx-page,
+.image-page-wrapper {
+  box-sizing: border-box;
+}
+
+/* The document itself may shrink to the available viewport. */
+.pdf-page-wrapper canvas,
+.image-document-image {
+  max-width: 100%;
+  height: auto;
+}
+
+/* =========================================
+   TABLET
+   ========================================= */
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 160px minmax(0, 1fr) 210px;
+  }
+
+  .sidebar,
+  .properties {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .canvas-area {
+    padding: 28px 24px;
+  }
+
+  .document-page {
+    width: min(100%, 850px);
+  }
+}
+
+/* =========================================
+   SMALL TABLET / PORTRAIT TABLET
+   ========================================= */
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+
+  .properties {
+    display: none;
+  }
+
+  .sidebar {
+    min-width: 0;
+    overflow-y: auto;
+  }
+
+  .canvas-area {
+    padding: 24px 18px;
+  }
+
+  .document-page {
+    width: 100%;
+    max-width: 850px;
+  }
+
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .document-title {
+    max-width: min(34vw, 240px);
+  }
+}
+
+/* =========================================
+   MOBILE EDITOR
+   ========================================= */
+
+@media (max-width: 650px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .topbar {
+    height: 58px;
+    min-height: 58px;
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .topbar-left {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-center {
+    display: none;
+  }
+
+  .icon-button {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    flex: 0 0 38px;
+  }
+
+  .document-title {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .document-title svg:last-child {
+    flex: 0 0 auto;
+  }
+
+  .secondary-button {
+    display: none;
+  }
+
+  .primary-button {
+    min-height: 38px;
+    padding: 9px 11px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .workspace {
+    display: block;
+    position: relative;
+    height: calc(100dvh - 58px);
+    min-height: 0;
+  }
+
+  .canvas-area {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 14px 8px 92px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .document-page {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 auto;
+  }
+
+  /* Bottom tool dock becomes horizontally scrollable instead of squeezing 7 tools. */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    min-height: 72px;
+    max-height: 84px;
+    z-index: 1000;
+    padding: 6px 7px max(6px, env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid #e1e1dc;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-heading {
+    display: none;
+  }
+
+  .tools {
+    width: max-content;
+    min-width: 100%;
+    height: 100%;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .tool {
+    width: 62px;
+    min-width: 62px;
+    flex: 0 0 62px;
+    min-height: 58px;
+    padding: 7px 4px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border-radius: 9px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .tool svg {
+    flex: 0 0 auto;
+  }
+
+  .canvas-area .pdf-page-wrapper {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .pdf-page-wrapper canvas {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .document-placeholder {
+    min-height: 65vh;
+    padding: 28px 18px;
+  }
+
+  .document-placeholder h2 {
+    max-width: 100%;
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  .document-placeholder p {
+    max-width: 320px;
+    line-height: 1.5;
+  }
+
+  /* Keep field text usable while allowing the field itself to remain resizable. */
+  .document-field textarea,
+  .name-input,
+  .email-input,
+  .date-field-content input {
+    font-size: 14px;
+  }
+
+  /* Field controls must stay inside the viewport when possible. */
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    max-width: min(92vw, 360px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .signature-controls::-webkit-scrollbar,
+  .date-controls::-webkit-scrollbar,
+  .checkbox-controls::-webkit-scrollbar,
+  .name-controls::-webkit-scrollbar,
+  .email-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .signature-controls {
+    top: -44px;
+  }
+
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    top: -42px;
+  }
+
+  /* Avoid editor controls being clipped by the viewport edges. */
+  .field-delete {
+    z-index: 500;
+  }
+}
+
+/* =========================================
+   SMALL PHONES
+   ========================================= */
+
+@media (max-width: 400px) {
+  .topbar {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .icon-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    flex-basis: 34px;
+  }
+
+  .document-title {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .primary-button {
+    min-width: 38px;
+    width: 38px;
+    padding: 8px;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .primary-button svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .canvas-area {
+    padding: 10px 5px 92px;
+  }
+
+  .tool {
+    width: 58px;
+    min-width: 58px;
+    flex-basis: 58px;
+    font-size: 9px;
+  }
+
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    max-width: calc(100vw - 16px);
+  }
+
+  .signature-type-area input {
+    font-size: 22px;
+  }
+}
+
+/* =========================================
+   VERY SMALL PHONES
+   ========================================= */
+
+@media (max-width: 340px) {
+  .document-title svg:first-child {
+    display: none;
+  }
+
+  .tool {
+    width: 56px;
+    min-width: 56px;
+    flex-basis: 56px;
+  }
+}
+
+/* =========================================
+   TOUCH / MOBILE INTERACTION
+   ========================================= */
+
+@media (pointer: coarse) {
+  .tool,
+  .icon-button,
+  .primary-button,
+  .secondary-button,
+  .property-delete {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tool {
+    min-height: 52px;
+  }
+}
+
+
+/* =========================================
+   FIELD DRAG HANDLES
+   ========================================= */
+
+.field-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 22px;
+
+  flex: 0 0 auto;
+
+  border: 1px solid #d5d5d0;
+  border-radius: 5px;
+
+  background: #f7f7f4;
+  color: #555;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+
+  z-index: 500;
+}
+
+.field-drag-handle:active {
+  cursor: grabbing;
+}
+
+.document-field > .field-drag-handle {
+  position: absolute;
+
+  top: 3px;
+  left: 50%;
+
+  transform: translateX(-50%);
+}
+
+.signature-drag-handle {
+  position: absolute;
+
+  left: 6px;
+  top: -34px;
+}
+
+.signature-drag-handle.field-drag-handle {
+  width: 30px;
+  height: 22px;
+}
+
+.name-controls .field-drag-handle,
+.email-controls .field-drag-handle,
+.date-controls .field-drag-handle,
+.checkbox-controls .field-drag-handle {
+  position: static;
+  transform: none;
+}
+
+@media (max-width: 650px) {
+  .field-drag-handle {
+    min-width: 30px;
+    width: 30px;
+    height: 24px;
+
+    font-size: 11px;
+  }
+
+  .document-field > .field-drag-handle {
+    top: 3px;
+  }
+
+  .signature-drag-handle {
+    top: -36px;
+  }
+}

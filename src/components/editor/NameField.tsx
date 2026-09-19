@@ -58,10 +58,13 @@ export default function NameField({
       event.target as HTMLElement;
 
     if (
-      target.closest(".name-controls") ||
-      target.closest(".name-resize-handle") ||
+      !target.closest(".field-drag-handle") &&
+      (
+        target.closest(".name-controls") ||
+        target.closest(".name-resize-handle") ||
       target.closest(".name-input") ||
-      target.closest(".field-delete")
+        target.closest(".field-delete")
+      )
     ) {
       return;
     }
@@ -85,7 +88,13 @@ export default function NameField({
       initialHeight: field.height,
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.target as HTMLElement).closest(
+        ".name-field"
+      ) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
@@ -166,15 +175,66 @@ export default function NameField({
       event.preventDefault();
       event.stopPropagation();
 
+      const parent =
+        event.currentTarget
+          .offsetParent as HTMLElement | null;
+
+      if (!parent) {
+        return;
+      }
+
+      const parentRect =
+        parent.getBoundingClientRect();
+
+      const scaleX =
+        parent.offsetWidth > 0
+          ? parentRect.width /
+            parent.offsetWidth
+          : 1;
+
+      const scaleY =
+        parent.offsetHeight > 0
+          ? parentRect.height /
+            parent.offsetHeight
+          : 1;
+
+      const coordinateDeltaX =
+        deltaX /
+        Math.max(scaleX, 0.0001);
+
+      const coordinateDeltaY =
+        deltaY /
+        Math.max(scaleY, 0.0001);
+
+      const maxX = Math.max(
+        0,
+        parent.offsetWidth -
+          field.width
+      );
+
+      const maxY = Math.max(
+        0,
+        parent.offsetHeight -
+          field.height
+      );
+
       onUpdate(field.id, {
-        x: Math.max(
-          0,
-          state.initialX + deltaX
+        x: Math.min(
+          maxX,
+          Math.max(
+            0,
+            state.initialX +
+              coordinateDeltaX
+          )
         ),
 
-        y: Math.max(
-          0,
-          state.initialY + deltaY
+        y: Math.min(
+          maxY,
+          Math.max(
+            0,
+            state.initialY +
+              coordinateDeltaY
+          )
         ),
       });
 
@@ -325,6 +385,42 @@ export default function NameField({
             event.stopPropagation()
           }
         >
+          <div
+            className="field-drag-handle"
+            role="button"
+style={{
+                position: "absolute",
+                top: "-30px",
+                right: "4px",
+                width: "28px",
+                height: "22px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                border: "1px solid #d8d8d3",
+                borderRadius: "6px",
+                background: "#ffffff",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                zIndex: 300,
+                touchAction: "none",
+                userSelect: "none",
+                cursor: "grab",
+                lineHeight: 1,
+              }}
+            aria-label="Move field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleDragStart(
+                event
+              );
+            }}
+          >
+            ⋮⋮
+          </div>
+
           <span className="name-control-label">
             Name
           </span>

@@ -134,7 +134,13 @@ export default function CheckboxField({
       initialHeight: field.height,
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.target as HTMLElement).closest(
+        ".checkbox-field"
+      ) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
@@ -219,14 +225,67 @@ export default function CheckboxField({
     event.preventDefault();
     event.stopPropagation();
 
+    const parent =
+      event.currentTarget
+        .parentElement
+        ?.parentElement
+        ?.offsetParent as HTMLElement | null;
+
+    if (!parent) {
+      return;
+    }
+
+    const parentRect =
+      parent.getBoundingClientRect();
+
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height /
+          parent.offsetHeight
+        : 1;
+
+    const coordinateDeltaX =
+      deltaX /
+      Math.max(scaleX, 0.0001);
+
+    const coordinateDeltaY =
+      deltaY /
+      Math.max(scaleY, 0.0001);
+
+    const maxX = Math.max(
+      0,
+      parent.offsetWidth -
+        field.width
+    );
+
+    const maxY = Math.max(
+      0,
+      parent.offsetHeight -
+        field.height
+    );
+
     onUpdate(field.id, {
-      x: Math.max(
-        0,
-        gesture.initialX + deltaX
+      x: Math.min(
+        maxX,
+        Math.max(
+          0,
+          gesture.initialX +
+            coordinateDeltaX
+        )
       ),
-      y: Math.max(
-        0,
-        gesture.initialY + deltaY
+      y: Math.min(
+        maxY,
+        Math.max(
+          0,
+          gesture.initialY +
+            coordinateDeltaY
+        )
       ),
     });
   };
@@ -372,15 +431,66 @@ export default function CheckboxField({
       event.preventDefault();
       event.stopPropagation();
 
+      const parent =
+        event.currentTarget
+          .offsetParent as HTMLElement | null;
+
+      if (!parent) {
+        return;
+      }
+
+      const parentRect =
+        parent.getBoundingClientRect();
+
+      const scaleX =
+        parent.offsetWidth > 0
+          ? parentRect.width /
+            parent.offsetWidth
+          : 1;
+
+      const scaleY =
+        parent.offsetHeight > 0
+          ? parentRect.height /
+            parent.offsetHeight
+          : 1;
+
+      const coordinateDeltaX =
+        deltaX /
+        Math.max(scaleX, 0.0001);
+
+      const coordinateDeltaY =
+        deltaY /
+        Math.max(scaleY, 0.0001);
+
+      const maxX = Math.max(
+        0,
+        parent.offsetWidth -
+          field.width
+      );
+
+      const maxY = Math.max(
+        0,
+        parent.offsetHeight -
+          field.height
+      );
+
       onUpdate(field.id, {
-        x: Math.max(
-          0,
-          state.initialX + deltaX
+        x: Math.min(
+          maxX,
+          Math.max(
+            0,
+            state.initialX +
+              coordinateDeltaX
+          )
         ),
 
-        y: Math.max(
-          0,
-          state.initialY + deltaY
+        y: Math.min(
+          maxY,
+          Math.max(
+            0,
+            state.initialY +
+              coordinateDeltaY
+          )
         ),
       });
 
@@ -483,8 +593,54 @@ export default function CheckboxField({
       }
     >
       {selected && (
-        <div
-          className="checkbox-controls"
+        <>
+          <div
+            className="field-drag-handle checkbox-drag-handle"
+            role="button"
+style={{
+                position: "absolute",
+                top: "-30px",
+                right: "4px",
+                width: "28px",
+                height: "22px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                border: "1px solid #d8d8d3",
+                borderRadius: "6px",
+                background: "#ffffff",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                zIndex: 300,
+                touchAction: "none",
+                userSelect: "none",
+                cursor: "grab",
+                lineHeight: 1,
+              }}
+            aria-label="Move checkbox field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleFieldPointerDown(
+                event
+              );
+            }}
+            onPointerMove={
+              handlePointerMove
+            }
+            onPointerUp={
+              handlePointerEnd
+            }
+            onPointerCancel={
+              handlePointerEnd
+            }
+          >
+            ⋮⋮
+          </div>
+
+          <div
+            className="checkbox-controls"
           onPointerDown={(event) =>
             event.stopPropagation()
           }
@@ -508,6 +664,7 @@ export default function CheckboxField({
             ×
           </button>
         </div>
+        </>
       )}
 
       <div className="checkbox-drag-area">

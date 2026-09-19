@@ -88,10 +88,13 @@ export default function DateField({
      * with controls, input or resize handles.
      */
     if (
-      target.closest(".date-controls") ||
-      target.closest(".date-resize-handle") ||
-      target.closest(".field-delete") ||
-      target.closest("input")
+      !target.closest(".field-drag-handle") &&
+      (
+        target.closest(".date-controls") ||
+        target.closest(".date-resize-handle") ||
+        target.closest(".field-delete") ||
+        target.closest("input")
+      )
     ) {
       return;
     }
@@ -101,6 +104,9 @@ export default function DateField({
     onSelect(field.id);
 
     const element =
+      ((event.target as HTMLElement).closest(
+        ".date-field"
+      ) as HTMLDivElement | null) ??
       event.currentTarget;
 
     const rect =
@@ -141,19 +147,51 @@ export default function DateField({
     const parentRect =
       parent.getBoundingClientRect();
 
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height /
+          parent.offsetHeight
+        : 1;
+
     const newX =
-      event.clientX -
-      parentRect.left -
-      dragState.current.offsetX;
+      (event.clientX -
+        parentRect.left -
+        dragState.current.offsetX) /
+      Math.max(scaleX, 0.0001);
 
     const newY =
-      event.clientY -
-      parentRect.top -
-      dragState.current.offsetY;
+      (event.clientY -
+        parentRect.top -
+        dragState.current.offsetY) /
+      Math.max(scaleY, 0.0001);
+
+    const maxX = Math.max(
+      0,
+      parent.offsetWidth -
+        field.width
+    );
+
+    const maxY = Math.max(
+      0,
+      parent.offsetHeight -
+        field.height
+    );
 
     onUpdate(field.id, {
-      x: Math.max(0, newX),
-      y: Math.max(0, newY),
+      x: Math.min(
+        maxX,
+        Math.max(0, newX)
+      ),
+      y: Math.min(
+        maxY,
+        Math.max(0, newY)
+      ),
     });
   };
 
@@ -321,6 +359,42 @@ export default function DateField({
             event.stopPropagation()
           }
         >
+          <div
+            className="field-drag-handle"
+            role="button"
+style={{
+                position: "absolute",
+                top: "-30px",
+                right: "4px",
+                width: "28px",
+                height: "22px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                border: "1px solid #d8d8d3",
+                borderRadius: "6px",
+                background: "#ffffff",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+                zIndex: 300,
+                touchAction: "none",
+                userSelect: "none",
+                cursor: "grab",
+                lineHeight: 1,
+              }}
+            aria-label="Move date field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleDragStart(
+                event
+              );
+            }}
+          >
+            ⋮⋮
+          </div>
+
           <span className="date-control-label">
             Date
           </span>

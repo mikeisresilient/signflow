@@ -87,11 +87,53 @@ export default function DocumentViewer({
     const rect =
       pageElement.getBoundingClientRect();
 
+    const displayWidth =
+      activeTool === "signature"
+        ? 320
+        : activeTool === "date"
+          ? 180
+          : activeTool === "checkbox"
+            ? 36
+            : activeTool === "name"
+              ? 240
+              : activeTool === "email"
+                ? 280
+                : 200;
+
+    const displayHeight =
+      activeTool === "signature"
+        ? 140
+        : activeTool === "checkbox"
+          ? 36
+          : 42;
+
     const x =
-      event.clientX - rect.left;
+      Math.min(
+        Math.max(
+          0,
+          rect.width -
+            displayWidth
+        ),
+        Math.max(
+          0,
+          event.clientX -
+            rect.left
+        )
+      );
 
     const y =
-      event.clientY - rect.top;
+      Math.min(
+        Math.max(
+          0,
+          rect.height -
+            displayHeight
+        ),
+        Math.max(
+          0,
+          event.clientY -
+            rect.top
+        )
+      );
 
     onAddField(
       pageNumber,

@@ -250,11 +250,51 @@ export default function ImageViewer({
       event.clientY -
       rect.top;
 
+    const displayFieldWidth =
+      activeTool === "signature"
+        ? 320
+        : activeTool === "date"
+          ? 180
+          : activeTool === "checkbox"
+            ? 36
+            : activeTool === "name"
+              ? 240
+              : activeTool === "email"
+                ? 280
+                : 200;
+
+    const displayFieldHeight =
+      activeTool === "signature"
+        ? 140
+        : activeTool === "checkbox"
+          ? 36
+          : 42;
+
+    const clampedDisplayX =
+      Math.min(
+        Math.max(
+          0,
+          rect.width -
+            displayFieldWidth
+        ),
+        Math.max(0, displayX)
+      );
+
+    const clampedDisplayY =
+      Math.min(
+        Math.max(
+          0,
+          rect.height -
+            displayFieldHeight
+        ),
+        Math.max(0, displayY)
+      );
+
     const x =
-      displayX / scale;
+      clampedDisplayX / scale;
 
     const y =
-      displayY / scale;
+      clampedDisplayY / scale;
 
     onAddField(
       1,
