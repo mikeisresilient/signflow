@@ -380,6 +380,8 @@ export default function DateField({
         top: field.y,
         width: field.width,
         height: field.height,
+        touchAction: "none",
+        userSelect: "none",
       }}
       onPointerDown={handleDragStart}
       onPointerMove={handleDragMove}
@@ -410,7 +412,8 @@ export default function DateField({
               );
             }}
           >
-            ⋮⋮
+            <span aria-hidden="true">⋮⋮</span>
+            <span>MOVE</span>
           </div>
 
           <span className="date-control-label">

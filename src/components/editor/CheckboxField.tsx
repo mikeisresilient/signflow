@@ -532,12 +532,12 @@ export default function CheckboxField({
       Math.max(scaleY, 0.0001);
 
     const maxWidth = Math.max(
-      24,
+      36,
       parent.offsetWidth - state.initialX
     );
 
     const maxHeight = Math.max(
-      24,
+      36,
       parent.offsetHeight - state.initialY
     );
 
@@ -551,7 +551,7 @@ export default function CheckboxField({
       updates.width = Math.min(
         maxWidth,
         Math.max(
-          24,
+          36,
           state.initialWidth +
             coordinateDeltaX
         )
@@ -565,7 +565,7 @@ export default function CheckboxField({
       updates.height = Math.min(
         maxHeight,
         Math.max(
-          24,
+          36,
           state.initialHeight +
             coordinateDeltaY
         )
@@ -665,7 +665,8 @@ export default function CheckboxField({
               handlePointerEnd
             }
           >
-            ⋮⋮
+            <span aria-hidden="true">⋮⋮</span>
+            <span>MOVE</span>
           </div>
 
           <div

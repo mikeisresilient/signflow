@@ -3475,3 +3475,261 @@ body {
     max-width: calc(100vw - 48px) !important;
   }
 }
+
+
+
+/* =========================================
+   SIGNFLOW — SHARED FIELD INTERACTION POLISH
+   ========================================= */
+
+/*
+ * Every selected field gets one consistent MOVE
+ * handle. The handle sits above the field without
+ * changing the document's internal coordinates.
+ */
+
+.field-drag-handle {
+  position: absolute;
+  top: -42px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 5px 9px;
+
+  border: 1px solid #d8d8d3;
+  border-radius: 7px;
+
+  background: #181818;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.2px;
+
+  white-space: nowrap;
+  cursor: grab;
+
+  user-select: none;
+  -webkit-user-select: none;
+
+  touch-action: none;
+  pointer-events: auto;
+
+  z-index: 500;
+
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.16);
+
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.field-drag-handle:hover {
+  background: #000000;
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.2);
+}
+
+.field-drag-handle:active {
+  cursor: grabbing;
+  transform: translateX(-50%) scale(0.98);
+}
+
+/*
+ * Make every custom field explicitly participate
+ * in pointer interaction.
+ */
+
+.signature-field,
+.date-field,
+.checkbox-field,
+.name-field,
+.email-field,
+.document-field {
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+/*
+ * Selected field controls should never become a
+ * source of horizontal scrolling.
+ */
+
+.signature-controls,
+.date-controls,
+.checkbox-controls,
+.name-controls,
+.email-controls {
+  max-width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+}
+
+/*
+ * Resize handles remain transparent but have a
+ * predictable touch target.
+ */
+
+.signature-resize-handle,
+.date-resize-handle,
+.checkbox-resize-handle,
+.name-resize-handle,
+.email-resize-handle,
+.field-resize-handle {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * Keep field controls above the field content.
+ */
+
+.signature-controls,
+.date-controls,
+.checkbox-controls,
+.name-controls,
+.email-controls {
+  pointer-events: auto;
+}
+
+/*
+ * Do not let controls or fields create a page-wide
+ * horizontal scrollbar.
+ */
+
+.field-layer,
+.docx-field-layer,
+.image-field-layer {
+  max-width: 100%;
+}
+
+/*
+ * Stronger touch behavior for the actual move handles.
+ */
+
+@media (pointer: coarse) {
+  .field-drag-handle {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+
+  .field-delete {
+    touch-action: manipulation;
+  }
+}
+
+/* =========================================
+   SHARED MOBILE FIELD CONTROLS
+   ========================================= */
+
+@media (max-width: 650px) {
+  .field-drag-handle {
+    top: -39px;
+    max-width: calc(100vw - 24px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    top: -39px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .signature-controls::-webkit-scrollbar,
+  .date-controls::-webkit-scrollbar,
+  .checkbox-controls::-webkit-scrollbar,
+  .name-controls::-webkit-scrollbar,
+  .email-controls::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* =========================================
+   VERY SMALL PHONES
+   ========================================= */
+
+@media (max-width: 400px) {
+  .field-drag-handle {
+    top: -37px;
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 9px;
+  }
+
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    max-width: calc(100vw - 16px);
+  }
+}
+
+/* =========================================
+   FINAL HORIZONTAL SCROLL SAFETY
+   ========================================= */
+
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+body {
+  min-width: 0 !important;
+  overscroll-behavior-x: none !important;
+}
+
+.app,
+.workspace {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.workspace {
+  overflow: hidden;
+}
+
+.canvas-area {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+@media (max-width: 650px) {
+  .canvas-area {
+    padding-left: 4px;
+    padding-right: 4px;
+    overflow-x: hidden;
+    touch-action: pan-y;
+  }
+}
+
+@media (max-width: 400px) {
+  .canvas-area {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+}
