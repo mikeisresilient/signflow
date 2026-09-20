@@ -482,8 +482,16 @@ export default function SignatureField({
      * interacting with controls,
      * resize handles, inputs or delete.
      */
+    const isDragHandle =
+      Boolean(
+        target.closest(
+          ".field-drag-handle",
+        ),
+      );
+
     if (
-      target.closest(
+      !isDragHandle &&
+      (target.closest(
         ".signature-controls",
       ) ||
       target.closest(
@@ -500,7 +508,7 @@ export default function SignatureField({
       ) ||
       target.closest(
         "button",
-      )
+      ))
     ) {
       return;
     }
@@ -512,9 +520,6 @@ export default function SignatureField({
     );
 
     const element =
-      ((event.currentTarget.closest(
-        ".signature-field"
-      )) as HTMLDivElement | null) ??
       event.currentTarget;
 
     const rect =
@@ -548,14 +553,9 @@ export default function SignatureField({
 
     event.stopPropagation();
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".signature-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
     const parent =
-      fieldElement.offsetParent as
+      event.currentTarget
+        .offsetParent as
         | HTMLElement
         | null;
 
@@ -568,51 +568,30 @@ export default function SignatureField({
 
     const scaleX =
       parent.offsetWidth > 0
-        ? parentRect.width /
-          parent.offsetWidth
+        ? parentRect.width / parent.offsetWidth
         : 1;
 
     const scaleY =
       parent.offsetHeight > 0
-        ? parentRect.height /
-          parent.offsetHeight
+        ? parentRect.height / parent.offsetHeight
         : 1;
 
     const newX =
-      (event.clientX -
-        parentRect.left -
-        dragState.current.offsetX) /
+      (event.clientX - parentRect.left - dragState.current.offsetX) /
       Math.max(scaleX, 0.0001);
 
     const newY =
-      (event.clientY -
-        parentRect.top -
-        dragState.current.offsetY) /
+      (event.clientY - parentRect.top - dragState.current.offsetY) /
       Math.max(scaleY, 0.0001);
 
-    const maxX = Math.max(
-      0,
-      parent.offsetWidth -
-        field.width,
-    );
-
-    const maxY = Math.max(
-      0,
-      parent.offsetHeight -
-        field.height,
-    );
+    const maxX = Math.max(0, parent.offsetWidth - field.width);
+    const maxY = Math.max(0, parent.offsetHeight - field.height);
 
     onUpdate(
       field.id,
       {
-        x: Math.min(
-          maxX,
-          Math.max(0, newX),
-        ),
-        y: Math.min(
-          maxY,
-          Math.max(0, newY),
-        ),
+        x: Math.min(maxX, Math.max(0, newX)),
+        y: Math.min(maxY, Math.max(0, newY)),
       },
     );
   };
@@ -675,13 +654,7 @@ export default function SignatureField({
       direction,
     };
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".signature-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId,
     );
   };
@@ -709,34 +682,20 @@ export default function SignatureField({
       event.clientY -
       state.startY;
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".signature-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
     const parent =
-      fieldElement.offsetParent as
-        | HTMLElement
-        | null;
+      event.currentTarget.offsetParent as HTMLElement | null;
 
-    const scaleX =
-      parent && parent.offsetWidth > 0
-        ? parent.getBoundingClientRect().width /
-          parent.offsetWidth
-        : 1;
+    if (!parent) {
+      return;
+    }
 
-    const scaleY =
-      parent && parent.offsetHeight > 0
-        ? parent.getBoundingClientRect().height /
-          parent.offsetHeight
-        : 1;
-
-    const coordinateDeltaX =
-      deltaX / Math.max(scaleX, 0.0001);
-
-    const coordinateDeltaY =
-      deltaY / Math.max(scaleY, 0.0001);
+    const parentRect = parent.getBoundingClientRect();
+    const scaleX = parent.offsetWidth > 0 ? parentRect.width / parent.offsetWidth : 1;
+    const scaleY = parent.offsetHeight > 0 ? parentRect.height / parent.offsetHeight : 1;
+    const coordinateDeltaX = deltaX / Math.max(scaleX, 0.0001);
+    const coordinateDeltaY = deltaY / Math.max(scaleY, 0.0001);
+    const maxWidth = Math.max(MIN_WIDTH, parent.offsetWidth - field.x);
+    const maxHeight = Math.max(MIN_HEIGHT, parent.offsetHeight - field.y);
 
     const startWidth =
       Math.max(
@@ -764,7 +723,7 @@ export default function SignatureField({
           width: Math.max(
             MIN_WIDTH,
             startWidth +
-              coordinateDeltaX,
+              deltaX,
           ),
         },
       );
@@ -786,7 +745,7 @@ export default function SignatureField({
           height: Math.max(
             MIN_HEIGHT,
             startHeight +
-              coordinateDeltaY,
+              deltaY,
           ),
         },
       );
@@ -805,31 +764,30 @@ export default function SignatureField({
       startHeight;
 
     const horizontalWidth =
-      Math.max(
-        MIN_WIDTH,
-        startWidth +
-          coordinateDeltaX,
+      Math.min(
+        maxWidth,
+        Math.max(MIN_WIDTH, startWidth + coordinateDeltaX),
       );
 
     const horizontalHeight =
-      Math.max(
-        MIN_HEIGHT,
-        horizontalWidth /
-          aspectRatio,
+      Math.min(
+        maxHeight,
+        Math.max(
+          MIN_HEIGHT,
+          horizontalWidth / aspectRatio,
+        ),
       );
 
     const verticalHeight =
-      Math.max(
-        MIN_HEIGHT,
-        startHeight +
-          coordinateDeltaY,
+      Math.min(
+        maxHeight,
+        Math.max(MIN_HEIGHT, startHeight + coordinateDeltaY),
       );
 
     const verticalWidth =
-      Math.max(
-        MIN_WIDTH,
-        verticalHeight *
-          aspectRatio,
+      Math.min(
+        maxWidth,
+        Math.max(MIN_WIDTH, verticalHeight * aspectRatio),
       );
 
     if (
@@ -947,7 +905,6 @@ export default function SignatureField({
       style={{
         left: field.x,
         top: field.y,
-        touchAction: "none",
         width: Math.max(
           MIN_WIDTH,
           field.width,
@@ -956,6 +913,7 @@ export default function SignatureField({
           MIN_HEIGHT,
           field.height,
         ),
+        touchAction: "none",
       }}
       onPointerDown={
         handleDragStart
@@ -987,6 +945,20 @@ export default function SignatureField({
             event.stopPropagation()
           }
         >
+          <div
+            className="field-drag-handle"
+            role="button"
+            aria-label="Move signature field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleDragStart(event);
+            }}
+          >
+            ⋮⋮
+          </div>
+
           <button
             type="button"
             className={
@@ -1056,22 +1028,6 @@ export default function SignatureField({
         </div>
       )}
 
-      {selected && (
-        <div
-          className="field-drag-handle signature-drag-handle"
-          role="button"
-          aria-label="Move signature field"
-          title="Drag to move"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleDragStart(event);
-          }}
-        >
-          ⋮⋮
-        </div>
-      )}
-
       {mode === "draw" && (
         <div className="signature-draw-area">
           <canvas
@@ -1124,7 +1080,7 @@ export default function SignatureField({
           <input
             type="text"
             value={typedValue}
-            placeholder="Type your signature"
+            placeholder=""
             onChange={
               handleTypedChange
             }
@@ -1142,6 +1098,15 @@ export default function SignatureField({
             }}
             aria-label="Type signature"
           />
+
+          {!typedValue && (
+            <span
+              className="signature-type-placeholder"
+              aria-hidden="true"
+            >
+              Type your signature
+            </span>
+          )}
         </div>
       )}
 

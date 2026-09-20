@@ -89,9 +89,9 @@ export default function EmailField({
     };
 
     const fieldElement =
-      ((event.currentTarget.closest(
+      ((event.target as HTMLElement).closest(
         ".email-field"
-      )) as HTMLDivElement | null) ??
+      ) as HTMLDivElement | null) ??
       event.currentTarget;
 
     fieldElement.setPointerCapture(
@@ -133,13 +133,7 @@ export default function EmailField({
       direction,
     };
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".email-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId
     );
   };
@@ -252,16 +246,24 @@ export default function EmailField({
      */
 
     const parent =
-      event.currentTarget.offsetParent as HTMLElement | null;
+      event.currentTarget
+        .offsetParent as HTMLElement | null;
+
+    if (!parent) {
+      return;
+    }
+
+    const parentRect =
+      parent.getBoundingClientRect();
 
     const scaleX =
-      parent && parent.offsetWidth > 0
-        ? parent.getBoundingClientRect().width / parent.offsetWidth
+      parent.offsetWidth > 0
+        ? parentRect.width / parent.offsetWidth
         : 1;
 
     const scaleY =
-      parent && parent.offsetHeight > 0
-        ? parent.getBoundingClientRect().height / parent.offsetHeight
+      parent.offsetHeight > 0
+        ? parentRect.height / parent.offsetHeight
         : 1;
 
     const coordinateDeltaX =
@@ -269,6 +271,9 @@ export default function EmailField({
 
     const coordinateDeltaY =
       deltaY / Math.max(scaleY, 0.0001);
+
+    const MIN_WIDTH = 120;
+    const MIN_HEIGHT = 32;
 
     const updates: Partial<DocumentField> =
       {};
@@ -278,7 +283,7 @@ export default function EmailField({
       state.direction === "corner"
     ) {
       updates.width = Math.max(
-        120,
+        MIN_WIDTH,
         state.initialWidth + coordinateDeltaX
       );
     }
@@ -288,8 +293,22 @@ export default function EmailField({
       state.direction === "corner"
     ) {
       updates.height = Math.max(
-        32,
+        MIN_HEIGHT,
         state.initialHeight + coordinateDeltaY
+      );
+    }
+
+    if (updates.width !== undefined) {
+      updates.width = Math.min(
+        Math.max(MIN_WIDTH, parent.offsetWidth - state.initialX),
+        Math.max(MIN_WIDTH, updates.width),
+      );
+    }
+
+    if (updates.height !== undefined) {
+      updates.height = Math.min(
+        Math.max(MIN_HEIGHT, parent.offsetHeight - state.initialY),
+        Math.max(MIN_HEIGHT, updates.height),
       );
     }
 
@@ -383,6 +402,7 @@ export default function EmailField({
         top: field.y,
         width: field.width,
         height: field.height,
+        touchAction: "none",
       }}
       onPointerDown={
         handleDragStart
@@ -410,6 +430,22 @@ export default function EmailField({
             event.stopPropagation()
           }
         >
+          <div
+            className="field-drag-handle"
+            role="button"
+            aria-label="Move field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleDragStart(
+                event
+              );
+            }}
+          >
+            ⋮⋮
+          </div>
+
           <span className="email-control-label">
             Email
           </span>
@@ -425,22 +461,6 @@ export default function EmailField({
           >
             ×
           </button>
-        </div>
-      )}
-
-      {selected && (
-        <div
-          className="field-drag-handle"
-          role="button"
-          aria-label="Move field"
-          title="Drag to move"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleDragStart(event);
-          }}
-        >
-          ⋮⋮
         </div>
       )}
 

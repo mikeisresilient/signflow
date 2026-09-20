@@ -390,13 +390,7 @@ export default function CheckboxField({
       direction,
     };
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".checkbox-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId
     );
   };
@@ -429,25 +423,6 @@ export default function CheckboxField({
 
     const deltaY =
       event.clientY - state.startY;
-
-    const parent =
-      event.currentTarget.offsetParent as HTMLElement | null;
-
-    const scaleX =
-      parent && parent.offsetWidth > 0
-        ? parent.getBoundingClientRect().width / parent.offsetWidth
-        : 1;
-
-    const scaleY =
-      parent && parent.offsetHeight > 0
-        ? parent.getBoundingClientRect().height / parent.offsetHeight
-        : 1;
-
-    const coordinateDeltaX =
-      deltaX / Math.max(scaleX, 0.0001);
-
-    const coordinateDeltaY =
-      deltaY / Math.max(scaleY, 0.0001);
 
     /*
      * DRAG
@@ -525,6 +500,47 @@ export default function CheckboxField({
     /*
      * RESIZE
      */
+    const parent =
+      event.currentTarget
+        .offsetParent as HTMLElement | null;
+
+    if (!parent) {
+      return;
+    }
+
+    const parentRect =
+      parent.getBoundingClientRect();
+
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height /
+          parent.offsetHeight
+        : 1;
+
+    const coordinateDeltaX =
+      deltaX /
+      Math.max(scaleX, 0.0001);
+
+    const coordinateDeltaY =
+      deltaY /
+      Math.max(scaleY, 0.0001);
+
+    const maxWidth = Math.max(
+      24,
+      parent.offsetWidth - state.initialX
+    );
+
+    const maxHeight = Math.max(
+      24,
+      parent.offsetHeight - state.initialY
+    );
+
     const updates: Partial<DocumentField> =
       {};
 
@@ -532,9 +548,13 @@ export default function CheckboxField({
       state.direction === "right" ||
       state.direction === "corner"
     ) {
-      updates.width = Math.max(
-        24,
-        state.initialWidth + coordinateDeltaX
+      updates.width = Math.min(
+        maxWidth,
+        Math.max(
+          24,
+          state.initialWidth +
+            coordinateDeltaX
+        )
       );
     }
 
@@ -542,9 +562,13 @@ export default function CheckboxField({
       state.direction === "bottom" ||
       state.direction === "corner"
     ) {
-      updates.height = Math.max(
-        24,
-        state.initialHeight + coordinateDeltaY
+      updates.height = Math.min(
+        maxHeight,
+        Math.max(
+          24,
+          state.initialHeight +
+            coordinateDeltaY
+        )
       );
     }
 
@@ -600,6 +624,7 @@ export default function CheckboxField({
         top: field.y,
         width: field.width,
         height: field.height,
+        touchAction: "none",
       }}
       onPointerDown={
         handleFieldPointerDown

@@ -85,6 +85,13 @@ export default function TextField({
   const MIN_HEIGHT = 36;
   const MAX_HEIGHT = 600;
 
+  const getParentElement = (
+    element: HTMLElement
+  ): HTMLElement | null => {
+    const parent = element.offsetParent;
+    return parent instanceof HTMLElement ? parent : null;
+  };
+
   /*
    * Start editing the field.
    */
@@ -441,13 +448,7 @@ export default function TextField({
       y: field.y,
     };
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".document-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId
     );
   };
@@ -470,9 +471,7 @@ export default function TextField({
       event.clientY -
       dragStart.current.y;
 
-    const parent =
-      event.currentTarget
-        .offsetParent as HTMLElement | null;
+    const parent = getParentElement(event.currentTarget);
 
     if (!parent) {
       return;
@@ -597,13 +596,7 @@ export default function TextField({
       height: field.height,
     };
 
-    const fieldElement =
-      ((event.currentTarget.closest(
-        ".document-field"
-      )) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId
     );
   };
@@ -625,6 +618,12 @@ export default function TextField({
       return;
     }
 
+    const parent = getParentElement(event.currentTarget);
+
+    if (!parent) {
+      return;
+    }
+
     const deltaX =
       event.clientX -
       resizeStart.current.x;
@@ -633,17 +632,17 @@ export default function TextField({
       event.clientY -
       resizeStart.current.y;
 
-    const parent =
-      event.currentTarget.offsetParent as HTMLElement | null;
+    const parentRect =
+      parent.getBoundingClientRect();
 
     const scaleX =
-      parent && parent.offsetWidth > 0
-        ? parent.getBoundingClientRect().width / parent.offsetWidth
+      parent.offsetWidth > 0
+        ? parentRect.width / parent.offsetWidth
         : 1;
 
     const scaleY =
-      parent && parent.offsetHeight > 0
-        ? parent.getBoundingClientRect().height / parent.offsetHeight
+      parent.offsetHeight > 0
+        ? parentRect.height / parent.offsetHeight
         : 1;
 
     const coordinateDeltaX =
@@ -662,35 +661,43 @@ export default function TextField({
       direction === "right" ||
       direction === "corner"
     ) {
-      newWidth =
-        Math.min(
-          MAX_WIDTH,
-          Math.max(
-            MIN_WIDTH,
-            resizeStart.current.width +
-              coordinateDeltaX
-          )
-        );
+      newWidth = Math.min(
+        MAX_WIDTH,
+        Math.max(
+          MIN_WIDTH,
+          resizeStart.current.width +
+            coordinateDeltaX
+        )
+      );
     }
 
     if (
       direction === "bottom" ||
       direction === "corner"
     ) {
-      newHeight =
-        Math.min(
-          MAX_HEIGHT,
-          Math.max(
-            MIN_HEIGHT,
-            resizeStart.current.height +
-              coordinateDeltaY
-          )
-        );
+      newHeight = Math.min(
+        MAX_HEIGHT,
+        Math.max(
+          MIN_HEIGHT,
+          resizeStart.current.height +
+            coordinateDeltaY
+        )
+      );
     }
 
+    const maxWidth = Math.max(
+      MIN_WIDTH,
+      parent.offsetWidth - field.x
+    );
+
+    const maxHeight = Math.max(
+      MIN_HEIGHT,
+      parent.offsetHeight - field.y
+    );
+
     onUpdate(field.id, {
-      width: newWidth,
-      height: newHeight,
+      width: Math.min(maxWidth, newWidth),
+      height: Math.min(maxHeight, newHeight),
     });
   };
 
@@ -776,6 +783,7 @@ export default function TextField({
           width: `${field.width}px`,
           minHeight: `${field.height}px`,
           height: `${field.height}px`,
+          touchAction: "none",
         }}
         onPointerDown={
           handlePointerDown
@@ -850,13 +858,7 @@ export default function TextField({
                   y: field.y,
                 };
 
-                const fieldElement =
-                  ((event.currentTarget.closest(
-                    ".document-field"
-                  )) as HTMLDivElement | null) ??
-                  event.currentTarget;
-
-                fieldElement.setPointerCapture(
+                event.currentTarget.setPointerCapture(
                   event.pointerId
                 );
               }}
