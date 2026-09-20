@@ -3766,3 +3766,49 @@ body {
 .pdf-page-wrapper .email-controls {
   pointer-events: auto !important;
 }
+
+
+/* =========================================================
+   SIGNFLOW FINAL FIELD INTERACTION LAYER
+   Pointer capture + touch behavior must live on the field
+   root so dragging and resizing remain stable when the
+   document is visually scaled on phones and tablets.
+   ========================================================= */
+
+.document-field,
+.signature-field,
+.date-field,
+.checkbox-field,
+.name-field,
+.email-field {
+  touch-action: none;
+}
+
+.field-drag-handle,
+.signature-drag-handle,
+.date-drag-handle,
+.checkbox-drag-handle,
+.name-drag-handle,
+.email-drag-handle,
+.field-resize-handle,
+.signature-resize-handle,
+.date-resize-handle,
+.checkbox-resize-handle,
+.name-resize-handle,
+.email-resize-handle {
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (pointer: coarse) {
+  .field-drag-handle,
+  .signature-drag-handle {
+    min-width: 34px;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

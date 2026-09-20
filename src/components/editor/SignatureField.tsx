@@ -512,6 +512,9 @@ export default function SignatureField({
     );
 
     const element =
+      ((event.currentTarget.closest(
+        ".signature-field"
+      )) as HTMLDivElement | null) ??
       event.currentTarget;
 
     const rect =
@@ -545,9 +548,14 @@ export default function SignatureField({
 
     event.stopPropagation();
 
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".signature-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
     const parent =
-      event.currentTarget
-        .offsetParent as
+      fieldElement.offsetParent as
         | HTMLElement
         | null;
 
@@ -558,28 +566,52 @@ export default function SignatureField({
     const parentRect =
       parent.getBoundingClientRect();
 
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height /
+          parent.offsetHeight
+        : 1;
+
     const newX =
-      event.clientX -
-      parentRect.left -
-      dragState.current
-        .offsetX;
+      (event.clientX -
+        parentRect.left -
+        dragState.current.offsetX) /
+      Math.max(scaleX, 0.0001);
 
     const newY =
-      event.clientY -
-      parentRect.top -
-      dragState.current
-        .offsetY;
+      (event.clientY -
+        parentRect.top -
+        dragState.current.offsetY) /
+      Math.max(scaleY, 0.0001);
+
+    const maxX = Math.max(
+      0,
+      parent.offsetWidth -
+        field.width,
+    );
+
+    const maxY = Math.max(
+      0,
+      parent.offsetHeight -
+        field.height,
+    );
 
     onUpdate(
       field.id,
       {
-        x: Math.max(
-          0,
-          newX,
+        x: Math.min(
+          maxX,
+          Math.max(0, newX),
         ),
-        y: Math.max(
-          0,
-          newY,
+        y: Math.min(
+          maxY,
+          Math.max(0, newY),
         ),
       },
     );
@@ -677,6 +709,35 @@ export default function SignatureField({
       event.clientY -
       state.startY;
 
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".signature-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    const parent =
+      fieldElement.offsetParent as
+        | HTMLElement
+        | null;
+
+    const scaleX =
+      parent && parent.offsetWidth > 0
+        ? parent.getBoundingClientRect().width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent && parent.offsetHeight > 0
+        ? parent.getBoundingClientRect().height /
+          parent.offsetHeight
+        : 1;
+
+    const coordinateDeltaX =
+      deltaX / Math.max(scaleX, 0.0001);
+
+    const coordinateDeltaY =
+      deltaY / Math.max(scaleY, 0.0001);
+
     const startWidth =
       Math.max(
         MIN_WIDTH,
@@ -703,7 +764,7 @@ export default function SignatureField({
           width: Math.max(
             MIN_WIDTH,
             startWidth +
-              deltaX,
+              coordinateDeltaX,
           ),
         },
       );
@@ -725,7 +786,7 @@ export default function SignatureField({
           height: Math.max(
             MIN_HEIGHT,
             startHeight +
-              deltaY,
+              coordinateDeltaY,
           ),
         },
       );
@@ -747,7 +808,7 @@ export default function SignatureField({
       Math.max(
         MIN_WIDTH,
         startWidth +
-          deltaX,
+          coordinateDeltaX,
       );
 
     const horizontalHeight =
@@ -761,7 +822,7 @@ export default function SignatureField({
       Math.max(
         MIN_HEIGHT,
         startHeight +
-          deltaY,
+          coordinateDeltaY,
       );
 
     const verticalWidth =
@@ -886,6 +947,7 @@ export default function SignatureField({
       style={{
         left: field.x,
         top: field.y,
+        touchAction: "none",
         width: Math.max(
           MIN_WIDTH,
           field.width,
