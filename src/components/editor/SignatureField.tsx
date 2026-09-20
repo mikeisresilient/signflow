@@ -8,8 +8,10 @@ import {
 
 import type { DocumentField } from "../../types/document";
 
-type SignatureMode = "draw" | "type" | "upload";
-type ResizeDirection = "right" | "bottom" | "corner";
+type SignatureMode =
+  | "draw"
+  | "type"
+  | "upload";
 
 interface SignatureFieldProps {
   field: DocumentField;
@@ -18,58 +20,35 @@ interface SignatureFieldProps {
     id: string,
     updates: Partial<DocumentField>,
   ) => void;
-  onDelete: (id: string) => void;
-  onSelect: (id: string) => void;
+  onDelete: (
+    id: string,
+  ) => void;
+  onSelect: (
+    id: string,
+  ) => void;
 }
 
 interface DragState {
-  pointerId: number;
   offsetX: number;
   offsetY: number;
 }
 
 interface ResizeState {
-  pointerId: number;
   startX: number;
   startY: number;
   startWidth: number;
   startHeight: number;
-  direction: ResizeDirection;
+  direction:
+    | "right"
+    | "bottom"
+    | "corner";
 }
 
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 60;
-const MAX_WIDTH = 700;
-const MAX_HEIGHT = 500;
 
 const DEFAULT_SIGNATURE_FONT =
   '"Brush Script MT", "Segoe Script", cursive';
-
-const getParentMetrics = (element: HTMLElement) => {
-  const parent = element.offsetParent as HTMLElement | null;
-
-  if (!parent) {
-    return {
-      parent: null,
-      scaleX: 1,
-      scaleY: 1,
-    };
-  }
-
-  const rect = parent.getBoundingClientRect();
-
-  return {
-    parent,
-    scaleX:
-      parent.offsetWidth > 0
-        ? rect.width / parent.offsetWidth
-        : 1,
-    scaleY:
-      parent.offsetHeight > 0
-        ? rect.height / parent.offsetHeight
-        : 1,
-  };
-};
 
 export default function SignatureField({
   field,
@@ -78,24 +57,67 @@ export default function SignatureField({
   onDelete,
   onSelect,
 }: SignatureFieldProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dragRef = useRef<DragState | null>(null);
-  const resizeRef = useRef<ResizeState | null>(null);
+  const canvasRef =
+    useRef<HTMLCanvasElement | null>(
+      null,
+    );
 
-  const [isDrawing, setIsDrawing] = useState(false);
+  const dragState =
+    useRef<DragState | null>(
+      null,
+    );
 
+  const resizeState =
+    useRef<ResizeState | null>(
+      null,
+    );
+
+  const [isDrawing, setIsDrawing] =
+    useState(false);
+
+  /*
+   * This is derived directly from
+   * the document field instead of being
+   * duplicated in React state.
+   */
+  const hasDrawing =
+    Boolean(
+      field.signatureImage,
+    );
+
+  /*
+   * Signature mode comes directly
+   * from the document field.
+   */
   const mode: SignatureMode =
-    field.signatureMode || "draw";
+    field.signatureMode ||
+    "draw";
 
-  const hasDrawing = Boolean(field.signatureImage);
-
+  /*
+   * Synchronize the actual canvas
+   * DOM element with the signature image.
+   *
+   * This effect is intentionally only
+   * concerned with the external canvas
+   * API. It does not call setState().
+   */
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas =
+      canvasRef.current;
 
-    if (!canvas || mode !== "draw") return;
+    if (
+      !canvas ||
+      mode !== "draw"
+    ) {
+      return;
+    }
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const context =
+      canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
 
     context.clearRect(
       0,
@@ -107,11 +129,17 @@ export default function SignatureField({
     context.lineWidth = 3;
     context.lineCap = "round";
     context.lineJoin = "round";
-    context.strokeStyle = "#181818";
+    context.strokeStyle =
+      "#181818";
 
-    if (!field.signatureImage) return;
+    if (
+      !field.signatureImage
+    ) {
+      return;
+    }
 
-    const image = new Image();
+    const image =
+      new Image();
 
     image.onload = () => {
       context.clearRect(
@@ -130,117 +158,200 @@ export default function SignatureField({
       );
     };
 
-    image.src = field.signatureImage;
+    image.src =
+      field.signatureImage;
 
     return () => {
       image.onload = null;
     };
-  }, [mode, field.signatureImage]);
+  }, [
+    mode,
+    field.signatureImage,
+  ]);
 
-  const getCanvasPoint = (
+  /*
+   * Start drawing.
+   */
+  const handlePointerDown = (
     event: ReactPointerEvent<HTMLCanvasElement>,
   ) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-
-    return {
-      x:
-        (event.clientX - rect.left) *
-        (canvas.width / Math.max(rect.width, 1)),
-      y:
-        (event.clientY - rect.top) *
-        (canvas.height / Math.max(rect.height, 1)),
-    };
-  };
-
-  const handleDrawStart = (
-    event: ReactPointerEvent<HTMLCanvasElement>,
-  ) => {
-    event.preventDefault();
     event.stopPropagation();
 
-    if (mode !== "draw") return;
+    if (
+      mode !== "draw"
+    ) {
+      return;
+    }
 
-    onSelect(field.id);
+    const canvas =
+      canvasRef.current;
 
-    const point = getCanvasPoint(event);
-    const canvas = canvasRef.current;
-    if (!point || !canvas) return;
+    if (!canvas) {
+      return;
+    }
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    canvas.setPointerCapture(
+      event.pointerId,
+    );
 
-    canvas.setPointerCapture(event.pointerId);
+    const rect =
+      canvas.getBoundingClientRect();
+
+    const scaleX =
+      canvas.width /
+      rect.width;
+
+    const scaleY =
+      canvas.height /
+      rect.height;
+
+    const x =
+      (event.clientX -
+        rect.left) *
+      scaleX;
+
+    const y =
+      (event.clientY -
+        rect.top) *
+      scaleY;
+
+    const context =
+      canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
 
     context.lineWidth = 3;
     context.lineCap = "round";
     context.lineJoin = "round";
-    context.strokeStyle = "#181818";
+    context.strokeStyle =
+      "#181818";
 
     context.beginPath();
-    context.moveTo(point.x, point.y);
+    context.moveTo(x, y);
 
     setIsDrawing(true);
   };
 
-  const handleDrawMove = (
+  /*
+   * Continue drawing.
+   */
+  const handlePointerMove = (
     event: ReactPointerEvent<HTMLCanvasElement>,
   ) => {
-    if (!isDrawing || mode !== "draw") return;
+    if (
+      !isDrawing ||
+      mode !== "draw"
+    ) {
+      return;
+    }
 
-    event.preventDefault();
-    event.stopPropagation();
+    const canvas =
+      canvasRef.current;
 
-    const point = getCanvasPoint(event);
-    const canvas = canvasRef.current;
-    if (!point || !canvas) return;
+    if (!canvas) {
+      return;
+    }
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const rect =
+      canvas.getBoundingClientRect();
 
-    context.lineTo(point.x, point.y);
+    const scaleX =
+      canvas.width /
+      rect.width;
+
+    const scaleY =
+      canvas.height /
+      rect.height;
+
+    const x =
+      (event.clientX -
+        rect.left) *
+      scaleX;
+
+    const y =
+      (event.clientY -
+        rect.top) *
+      scaleY;
+
+    const context =
+      canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    context.lineTo(x, y);
     context.stroke();
   };
 
+  /*
+   * Finish drawing and save the
+   * signature as a PNG data URL.
+   */
   const finishDrawing = (
     event?: ReactPointerEvent<HTMLCanvasElement>,
   ) => {
-    if (!isDrawing) return;
+    if (!isDrawing) {
+      return;
+    }
 
-    const canvas = canvasRef.current;
+    const canvas =
+      canvasRef.current;
 
     if (
       event &&
-      canvas?.hasPointerCapture(event.pointerId)
+      canvas?.hasPointerCapture(
+        event.pointerId,
+      )
     ) {
-      canvas.releasePointerCapture(event.pointerId);
+      canvas.releasePointerCapture(
+        event.pointerId,
+      );
     }
 
     setIsDrawing(false);
 
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
-    const image = canvas.toDataURL("image/png");
+    const image =
+      canvas.toDataURL(
+        "image/png",
+      );
 
-    onUpdate(field.id, {
-      value: image,
-      signatureImage: image,
-    });
+    onUpdate(
+      field.id,
+      {
+        value: image,
+        signatureImage: image,
+      },
+    );
   };
 
+  /*
+   * Clear the drawn signature.
+   */
   const handleClearDrawing = (
     event: React.MouseEvent<HTMLButtonElement>,
   ) => {
-    event.preventDefault();
     event.stopPropagation();
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvas =
+      canvasRef.current;
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    if (!canvas) {
+      return;
+    }
+
+    const context =
+      canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
 
     context.clearRect(
       0,
@@ -249,181 +360,241 @@ export default function SignatureField({
       canvas.height,
     );
 
-    onUpdate(field.id, {
-      value: "",
-      signatureImage: "",
-    });
-
-    onSelect(field.id);
+    onUpdate(
+      field.id,
+      {
+        value: "",
+        signatureImage: "",
+      },
+    );
   };
 
+  /*
+   * Change signature mode.
+   */
   const handleModeChange = (
     nextMode: SignatureMode,
     event: React.MouseEvent,
   ) => {
-    event.preventDefault();
     event.stopPropagation();
 
-    onSelect(field.id);
+    onSelect(
+      field.id,
+    );
 
-    onUpdate(field.id, {
-      signatureMode: nextMode,
-    });
-  };
-
-  const handleTypedChange = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    onUpdate(field.id, {
-      value: event.target.value,
-      signatureImage: "",
-    });
-  };
-
-  const handleUpload = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-
-    if (!file || !file.type.startsWith("image/")) {
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-
-      onUpdate(field.id, {
-        value: reader.result,
-        signatureImage: reader.result,
-      });
-
-      onSelect(field.id);
-    };
-
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
-
-  const startDrag = (
-    event: ReactPointerEvent<HTMLElement>,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    onSelect(field.id);
-
-    const fieldElement =
-      event.currentTarget.closest(
-        ".signature-field",
-      ) as HTMLElement | null;
-
-    if (!fieldElement) return;
-
-    const rect = fieldElement.getBoundingClientRect();
-    const { scaleX, scaleY } =
-      getParentMetrics(fieldElement);
-
-    dragRef.current = {
-      pointerId: event.pointerId,
-      offsetX:
-        (event.clientX - rect.left) /
-        Math.max(scaleX, 0.0001),
-      offsetY:
-        (event.clientY - rect.top) /
-        Math.max(scaleY, 0.0001),
-    };
-
-    event.currentTarget.setPointerCapture(
-      event.pointerId,
+    onUpdate(
+      field.id,
+      {
+        signatureMode:
+          nextMode,
+      },
     );
   };
 
-  const moveDrag = (
-    event: ReactPointerEvent<HTMLElement>,
+  /*
+   * Typed signature.
+   *
+   * field.value is the source of
+   * truth, so there is no second
+   * state value to synchronize.
+   */
+  const handleTypedChange = (
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
-    const state = dragRef.current;
+    const value =
+      event.target.value;
+
+    onUpdate(
+      field.id,
+      {
+        value,
+        signatureImage: "",
+      },
+    );
+  };
+
+  /*
+   * Upload signature image.
+   */
+  const handleUpload = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
 
     if (
-      !state ||
-      state.pointerId !== event.pointerId
+      !file.type.startsWith(
+        "image/",
+      )
     ) {
       return;
     }
 
-    event.preventDefault();
+    const reader =
+      new FileReader();
+
+    reader.onload = () => {
+      const result =
+        reader.result;
+
+      if (
+        typeof result !==
+        "string"
+      ) {
+        return;
+      }
+
+      onUpdate(
+        field.id,
+        {
+          value: result,
+          signatureImage: result,
+        },
+      );
+    };
+
+    reader.readAsDataURL(
+      file,
+    );
+
+    /*
+     * Allows the same file to be
+     * selected again.
+     */
+    event.target.value = "";
+  };
+
+  /*
+   * Start dragging the signature.
+   */
+  const handleDragStart = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const target =
+      event.target as HTMLElement;
+
+    /*
+     * Do not start a field drag when
+     * interacting with controls,
+     * resize handles, inputs or delete.
+     */
+    if (
+      target.closest(
+        ".signature-controls",
+      ) ||
+      target.closest(
+        ".signature-resize-handle",
+      ) ||
+      target.closest(
+        ".field-delete",
+      ) ||
+      target.closest(
+        "input",
+      ) ||
+      target.closest(
+        "label",
+      ) ||
+      target.closest(
+        "button",
+      )
+    ) {
+      return;
+    }
+
     event.stopPropagation();
 
-    const fieldElement =
-      event.currentTarget.closest(
-        ".signature-field",
-      ) as HTMLElement | null;
+    onSelect(
+      field.id,
+    );
 
-    if (!fieldElement) return;
+    const element =
+      event.currentTarget;
 
-    const { parent, scaleX, scaleY } =
-      getParentMetrics(fieldElement);
+    const rect =
+      element.getBoundingClientRect();
 
-    if (!parent) return;
+    dragState.current = {
+      offsetX:
+        event.clientX -
+        rect.left,
+      offsetY:
+        event.clientY -
+        rect.top,
+    };
+
+    element.setPointerCapture(
+      event.pointerId,
+    );
+  };
+
+  /*
+   * Move signature.
+   */
+  const handleDragMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      !dragState.current
+    ) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const parent =
+      event.currentTarget
+        .offsetParent as
+        | HTMLElement
+        | null;
+
+    if (!parent) {
+      return;
+    }
 
     const parentRect =
       parent.getBoundingClientRect();
 
-    const pointerX =
-      (event.clientX - parentRect.left) /
-      Math.max(scaleX, 0.0001);
+    const newX =
+      event.clientX -
+      parentRect.left -
+      dragState.current
+        .offsetX;
 
-    const pointerY =
-      (event.clientY - parentRect.top) /
-      Math.max(scaleY, 0.0001);
+    const newY =
+      event.clientY -
+      parentRect.top -
+      dragState.current
+        .offsetY;
 
-    const width = Math.max(
-      MIN_WIDTH,
-      field.width,
-    );
-
-    const height = Math.max(
-      MIN_HEIGHT,
-      field.height,
-    );
-
-    const maxX = Math.max(
-      0,
-      parent.offsetWidth - width,
-    );
-
-    const maxY = Math.max(
-      0,
-      parent.offsetHeight - height,
-    );
-
-    onUpdate(field.id, {
-      x: Math.min(
-        maxX,
-        Math.max(
+    onUpdate(
+      field.id,
+      {
+        x: Math.max(
           0,
-          pointerX - state.offsetX,
+          newX,
         ),
-      ),
-      y: Math.min(
-        maxY,
-        Math.max(
+        y: Math.max(
           0,
-          pointerY - state.offsetY,
+          newY,
         ),
-      ),
-    });
+      },
+    );
   };
 
-  const endDrag = (
-    event: ReactPointerEvent<HTMLElement>,
+  /*
+   * Finish dragging.
+   */
+  const handleDragEnd = (
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     if (
-      dragRef.current?.pointerId ===
-      event.pointerId
+      !dragState.current
     ) {
-      dragRef.current = null;
+      return;
     }
 
     if (
@@ -435,171 +606,207 @@ export default function SignatureField({
         event.pointerId,
       );
     }
+
+    dragState.current =
+      null;
   };
 
-  const startResize = (
-    event: ReactPointerEvent<HTMLElement>,
-    direction: ResizeDirection,
+  /*
+   * Start resizing.
+   */
+  const handleResizeStart = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    direction:
+      ResizeState["direction"],
   ) => {
-    event.preventDefault();
     event.stopPropagation();
 
-    onSelect(field.id);
+    onSelect(
+      field.id,
+    );
 
-    resizeRef.current = {
-      pointerId: event.pointerId,
+    resizeState.current = {
+      startX:
+        event.clientX,
+      startY:
+        event.clientY,
+      startWidth:
+        Math.max(
+          MIN_WIDTH,
+          field.width,
+        ),
+      startHeight:
+        Math.max(
+          MIN_HEIGHT,
+          field.height,
+        ),
       direction,
-      startX: event.clientX,
-      startY: event.clientY,
-      startWidth: Math.max(
-        MIN_WIDTH,
-        field.width,
-      ),
-      startHeight: Math.max(
-        MIN_HEIGHT,
-        field.height,
-      ),
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".signature-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId,
     );
   };
 
-  const moveResize = (
-    event: ReactPointerEvent<HTMLElement>,
+  /*
+   * Resize signature.
+   */
+  const handleResizeMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
-    const state = resizeRef.current;
+    const state =
+      resizeState.current;
 
-    if (
-      !state ||
-      state.pointerId !== event.pointerId
-    ) {
+    if (!state) {
       return;
     }
 
-    event.preventDefault();
     event.stopPropagation();
 
-    const fieldElement =
-      event.currentTarget.closest(
-        ".signature-field",
-      ) as HTMLElement | null;
-
-    if (!fieldElement) return;
-
-    const { parent, scaleX, scaleY } =
-      getParentMetrics(fieldElement);
-
-    if (!parent) return;
-
     const deltaX =
-      (event.clientX - state.startX) /
-      Math.max(scaleX, 0.0001);
+      event.clientX -
+      state.startX;
 
     const deltaY =
-      (event.clientY - state.startY) /
-      Math.max(scaleY, 0.0001);
+      event.clientY -
+      state.startY;
 
-    const maxWidth = Math.max(
-      MIN_WIDTH,
-      Math.min(
-        MAX_WIDTH,
-        parent.offsetWidth - field.x,
-      ),
-    );
+    const startWidth =
+      Math.max(
+        MIN_WIDTH,
+        state.startWidth,
+      );
 
-    const maxHeight = Math.max(
-      MIN_HEIGHT,
-      Math.min(
-        MAX_HEIGHT,
-        parent.offsetHeight - field.y,
-      ),
-    );
+    const startHeight =
+      Math.max(
+        MIN_HEIGHT,
+        state.startHeight,
+      );
 
-    if (state.direction === "right") {
-      onUpdate(field.id, {
-        width: Math.min(
-          maxWidth,
-          Math.max(
+    /*
+     * Right handle:
+     * resize width only.
+     */
+    if (
+      state.direction ===
+      "right"
+    ) {
+      onUpdate(
+        field.id,
+        {
+          width: Math.max(
             MIN_WIDTH,
-            state.startWidth + deltaX,
+            startWidth +
+              deltaX,
           ),
-        ),
-      });
+        },
+      );
+
       return;
     }
 
-    if (state.direction === "bottom") {
-      onUpdate(field.id, {
-        height: Math.min(
-          maxHeight,
-          Math.max(
+    /*
+     * Bottom handle:
+     * resize height only.
+     */
+    if (
+      state.direction ===
+      "bottom"
+    ) {
+      onUpdate(
+        field.id,
+        {
+          height: Math.max(
             MIN_HEIGHT,
-            state.startHeight + deltaY,
+            startHeight +
+              deltaY,
           ),
-        ),
-      });
+        },
+      );
+
       return;
     }
 
-    const ratio =
-      state.startWidth /
-      Math.max(state.startHeight, 1);
+    /*
+     * Corner handle:
+     *
+     * Preserve the original
+     * signature aspect ratio.
+     */
+    const aspectRatio =
+      startWidth /
+      startHeight;
 
-    const widthFromX = Math.min(
-      maxWidth,
+    const horizontalWidth =
       Math.max(
         MIN_WIDTH,
-        state.startWidth + deltaX,
-      ),
-    );
+        startWidth +
+          deltaX,
+      );
 
-    const heightFromX = Math.min(
-      maxHeight,
+    const horizontalHeight =
       Math.max(
         MIN_HEIGHT,
-        widthFromX / ratio,
-      ),
-    );
+        horizontalWidth /
+          aspectRatio,
+      );
 
-    const heightFromY = Math.min(
-      maxHeight,
+    const verticalHeight =
       Math.max(
         MIN_HEIGHT,
-        state.startHeight + deltaY,
-      ),
-    );
+        startHeight +
+          deltaY,
+      );
 
-    const widthFromY = Math.min(
-      maxWidth,
+    const verticalWidth =
       Math.max(
         MIN_WIDTH,
-        heightFromY * ratio,
-      ),
-    );
+        verticalHeight *
+          aspectRatio,
+      );
 
-    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-      onUpdate(field.id, {
-        width: widthFromX,
-        height: heightFromX,
-      });
+    if (
+      Math.abs(deltaX) >=
+      Math.abs(deltaY)
+    ) {
+      onUpdate(
+        field.id,
+        {
+          width:
+            horizontalWidth,
+          height:
+            horizontalHeight,
+        },
+      );
     } else {
-      onUpdate(field.id, {
-        width: widthFromY,
-        height: heightFromY,
-      });
+      onUpdate(
+        field.id,
+        {
+          width:
+            verticalWidth,
+          height:
+            verticalHeight,
+        },
+      );
     }
   };
 
-  const endResize = (
-    event: ReactPointerEvent<HTMLElement>,
+  /*
+   * Finish resizing.
+   */
+  const handleResizeEnd = (
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     if (
-      resizeRef.current?.pointerId ===
-      event.pointerId
+      !resizeState.current
     ) {
-      resizeRef.current = null;
+      return;
     }
 
     if (
@@ -611,9 +818,34 @@ export default function SignatureField({
         event.pointerId,
       );
     }
+
+    resizeState.current =
+      null;
   };
 
-  const typedValue = field.value || "";
+  /*
+   * Delete signature.
+   */
+  const handleDelete = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.stopPropagation();
+
+    onDelete(
+      field.id,
+    );
+  };
+
+  /*
+   * Dynamically reduce typed
+   * signature font size as the
+   * field becomes narrower.
+   *
+   * This prevents typed signatures
+   * from being visibly cut off.
+   */
+  const typedValue =
+    field.value || "";
 
   const typedFontSize =
     typedValue.length > 0
@@ -621,11 +853,13 @@ export default function SignatureField({
           10,
           Math.min(
             42,
-            field.height * 0.58,
+            field.height *
+              0.58,
             field.width /
               Math.max(
                 1,
-                typedValue.length * 0.62,
+                typedValue.length *
+                  0.62,
               ),
           ),
         )
@@ -633,7 +867,8 @@ export default function SignatureField({
           12,
           Math.min(
             32,
-            field.height * 0.58,
+            field.height *
+              0.58,
           ),
         );
 
@@ -659,49 +894,27 @@ export default function SignatureField({
           MIN_HEIGHT,
           field.height,
         ),
-        minWidth: MIN_WIDTH,
-        minHeight: MIN_HEIGHT,
-        touchAction: "none",
       }}
-      onPointerDown={(event) => {
-        const target =
-          event.target as HTMLElement;
-
-        if (
-          target.closest(
-            ".signature-controls, .signature-resize-handle, .field-drag-handle, .field-delete, canvas, input, label, button",
-          )
-        ) {
-          return;
-        }
-
-        startDrag(event);
-      }}
-      onPointerMove={moveDrag}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerDown={
+        handleDragStart
+      }
+      onPointerMove={
+        handleDragMove
+      }
+      onPointerUp={
+        handleDragEnd
+      }
+      onPointerCancel={
+        handleDragEnd
+      }
       onClick={(event) => {
         event.stopPropagation();
-        onSelect(field.id);
+
+        onSelect(
+          field.id,
+        );
       }}
     >
-      {selected && (
-        <div
-          className="field-drag-handle signature-drag-handle"
-          role="button"
-          tabIndex={0}
-          aria-label="Move signature field"
-          title="Drag to move signature"
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-        >
-          <span aria-hidden="true">⋮⋮</span>
-          <span>MOVE</span>
-        </div>
-      )}
-
       {selected && (
         <div
           className="signature-controls"
@@ -757,29 +970,43 @@ export default function SignatureField({
             }
           >
             Upload
+
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={handleUpload}
+              onChange={
+                handleUpload
+              }
             />
           </label>
 
           <button
             type="button"
             className="field-delete signature-delete-button"
-            aria-label="Delete signature field"
-            title="Delete signature field"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onDelete(field.id);
-            }}
-            onClick={(event) =>
-              event.stopPropagation()
+            onClick={
+              handleDelete
             }
+            aria-label="Delete signature"
+            title="Delete signature"
           >
             ×
           </button>
+        </div>
+      )}
+
+      {selected && (
+        <div
+          className="field-drag-handle signature-drag-handle"
+          role="button"
+          aria-label="Move signature field"
+          title="Drag to move"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleDragStart(event);
+          }}
+        >
+          ⋮⋮
         </div>
       )}
 
@@ -790,10 +1017,18 @@ export default function SignatureField({
             className="signature-canvas"
             width={700}
             height={260}
-            onPointerDown={handleDrawStart}
-            onPointerMove={handleDrawMove}
-            onPointerUp={finishDrawing}
-            onPointerCancel={finishDrawing}
+            onPointerDown={
+              handlePointerDown
+            }
+            onPointerMove={
+              handlePointerMove
+            }
+            onPointerUp={
+              finishDrawing
+            }
+            onPointerCancel={
+              finishDrawing
+            }
           />
 
           {!hasDrawing && (
@@ -802,18 +1037,23 @@ export default function SignatureField({
             </div>
           )}
 
-          {selected && hasDrawing && (
-            <button
-              type="button"
-              className="signature-clear"
-              onPointerDown={(event) =>
-                event.stopPropagation()
-              }
-              onClick={handleClearDrawing}
-            >
-              Clear
-            </button>
-          )}
+          {selected &&
+            hasDrawing && (
+              <button
+                type="button"
+                className="signature-clear"
+                onPointerDown={(
+                  event,
+                ) =>
+                  event.stopPropagation()
+                }
+                onClick={
+                  handleClearDrawing
+                }
+              >
+                Clear
+              </button>
+            )}
         </div>
       )}
 
@@ -823,15 +1063,20 @@ export default function SignatureField({
             type="text"
             value={typedValue}
             placeholder="Type your signature"
-            onChange={handleTypedChange}
-            onPointerDown={(event) =>
+            onChange={
+              handleTypedChange
+            }
+            onPointerDown={(
+              event,
+            ) =>
               event.stopPropagation()
             }
             style={{
               fontFamily:
                 field.signatureFont ||
                 DEFAULT_SIGNATURE_FONT,
-              fontSize: `${typedFontSize}px`,
+              fontSize:
+                `${typedFontSize}px`,
             }}
             aria-label="Type signature"
           />
@@ -850,15 +1095,22 @@ export default function SignatureField({
           ) : (
             <label
               className="signature-upload-label"
-              onPointerDown={(event) =>
+              onPointerDown={(
+                event,
+              ) =>
                 event.stopPropagation()
               }
             >
-              <span>Choose signature image</span>
+              <span>
+                Choose signature image
+              </span>
+
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                onChange={handleUpload}
+                onChange={
+                  handleUpload
+                }
               />
             </label>
           )}
@@ -869,38 +1121,65 @@ export default function SignatureField({
         <>
           <div
             className="signature-resize-handle signature-resize-right"
-            role="presentation"
-            aria-label="Resize signature width"
-            onPointerDown={(event) =>
-              startResize(event, "right")
+            onPointerDown={(
+              event,
+            ) =>
+              handleResizeStart(
+                event,
+                "right",
+              )
             }
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
+            onPointerMove={
+              handleResizeMove
+            }
+            onPointerUp={
+              handleResizeEnd
+            }
+            onPointerCancel={
+              handleResizeEnd
+            }
           />
 
           <div
             className="signature-resize-handle signature-resize-bottom"
-            role="presentation"
-            aria-label="Resize signature height"
-            onPointerDown={(event) =>
-              startResize(event, "bottom")
+            onPointerDown={(
+              event,
+            ) =>
+              handleResizeStart(
+                event,
+                "bottom",
+              )
             }
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
+            onPointerMove={
+              handleResizeMove
+            }
+            onPointerUp={
+              handleResizeEnd
+            }
+            onPointerCancel={
+              handleResizeEnd
+            }
           />
 
           <div
             className="signature-resize-handle signature-resize-corner"
-            role="presentation"
-            aria-label="Resize signature proportionally"
-            onPointerDown={(event) =>
-              startResize(event, "corner")
+            onPointerDown={(
+              event,
+            ) =>
+              handleResizeStart(
+                event,
+                "corner",
+              )
             }
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
+            onPointerMove={
+              handleResizeMove
+            }
+            onPointerUp={
+              handleResizeEnd
+            }
+            onPointerCancel={
+              handleResizeEnd
+            }
           />
         </>
       )}

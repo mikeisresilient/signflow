@@ -89,9 +89,9 @@ export default function NameField({
     };
 
     const fieldElement =
-      ((event.target as HTMLElement).closest(
+      ((event.currentTarget.closest(
         ".name-field"
-      ) as HTMLDivElement | null) ??
+      )) as HTMLDivElement | null) ??
       event.currentTarget;
 
     fieldElement.setPointerCapture(
@@ -133,7 +133,13 @@ export default function NameField({
       direction,
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".name-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
@@ -248,27 +254,43 @@ export default function NameField({
     const parent =
       event.currentTarget.offsetParent as HTMLElement | null;
 
-    if (!parent) {
-      return;
+    const scaleX =
+      parent && parent.offsetWidth > 0
+        ? parent.getBoundingClientRect().width / parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent && parent.offsetHeight > 0
+        ? parent.getBoundingClientRect().height / parent.offsetHeight
+        : 1;
+
+    const coordinateDeltaX =
+      deltaX / Math.max(scaleX, 0.0001);
+
+    const coordinateDeltaY =
+      deltaY / Math.max(scaleY, 0.0001);
+
+    const updates: Partial<DocumentField> =
+      {};
+
+    if (
+      state.direction === "right" ||
+      state.direction === "corner"
+    ) {
+      updates.width = Math.max(
+        80,
+        state.initialWidth + coordinateDeltaX
+      );
     }
 
-    const parentRect = parent.getBoundingClientRect();
-    const scaleX = parent.offsetWidth > 0 ? parentRect.width / parent.offsetWidth : 1;
-    const scaleY = parent.offsetHeight > 0 ? parentRect.height / parent.offsetHeight : 1;
-
-    const coordinateDeltaX = deltaX / Math.max(scaleX, 0.0001);
-    const coordinateDeltaY = deltaY / Math.max(scaleY, 0.0001);
-
-    const updates: Partial<DocumentField> = {};
-
-    if (state.direction === "right" || state.direction === "corner") {
-      const maxWidth = Math.max(80, parent.offsetWidth - state.initialX);
-      updates.width = Math.min(maxWidth, Math.max(80, state.initialWidth + coordinateDeltaX));
-    }
-
-    if (state.direction === "bottom" || state.direction === "corner") {
-      const maxHeight = Math.max(32, parent.offsetHeight - state.initialY);
-      updates.height = Math.min(maxHeight, Math.max(32, state.initialHeight + coordinateDeltaY));
+    if (
+      state.direction === "bottom" ||
+      state.direction === "corner"
+    ) {
+      updates.height = Math.max(
+        32,
+        state.initialHeight + coordinateDeltaY
+      );
     }
 
     onUpdate(
@@ -388,22 +410,6 @@ export default function NameField({
             event.stopPropagation()
           }
         >
-          <div
-            className="field-drag-handle"
-            role="button"
-            aria-label="Move field"
-            title="Drag to move"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleDragStart(
-                event
-              );
-            }}
-          >
-            ⋮⋮
-          </div>
-
           <span className="name-control-label">
             Name
           </span>
@@ -419,6 +425,22 @@ export default function NameField({
           >
             ×
           </button>
+        </div>
+      )}
+
+      {selected && (
+        <div
+          className="field-drag-handle"
+          role="button"
+          aria-label="Move field"
+          title="Drag to move"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleDragStart(event);
+          }}
+        >
+          ⋮⋮
         </div>
       )}
 

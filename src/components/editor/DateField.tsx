@@ -238,7 +238,13 @@ export default function DateField({
       direction,
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".date-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
@@ -259,43 +265,30 @@ export default function DateField({
     event.preventDefault();
     event.stopPropagation();
 
+    const deltaX =
+      event.clientX - state.startX;
+
+    const deltaY =
+      event.clientY - state.startY;
+
     const parent =
       event.currentTarget.offsetParent as HTMLElement | null;
 
-    if (!parent) {
-      return;
-    }
-
-    const parentRect =
-      parent.getBoundingClientRect();
-
     const scaleX =
-      parent.offsetWidth > 0
-        ? parentRect.width / parent.offsetWidth
+      parent && parent.offsetWidth > 0
+        ? parent.getBoundingClientRect().width / parent.offsetWidth
         : 1;
 
     const scaleY =
-      parent.offsetHeight > 0
-        ? parentRect.height / parent.offsetHeight
+      parent && parent.offsetHeight > 0
+        ? parent.getBoundingClientRect().height / parent.offsetHeight
         : 1;
 
-    const deltaX =
-      (event.clientX - state.startX) /
-      Math.max(scaleX, 0.0001);
+    const coordinateDeltaX =
+      deltaX / Math.max(scaleX, 0.0001);
 
-    const deltaY =
-      (event.clientY - state.startY) /
-      Math.max(scaleY, 0.0001);
-
-    const maxWidth = Math.max(
-      MIN_WIDTH,
-      parent.offsetWidth - field.x
-    );
-
-    const maxHeight = Math.max(
-      MIN_HEIGHT,
-      parent.offsetHeight - field.y
-    );
+    const coordinateDeltaY =
+      deltaY / Math.max(scaleY, 0.0001);
 
     const updates: Partial<DocumentField> = {};
 
@@ -303,12 +296,9 @@ export default function DateField({
       state.direction === "right" ||
       state.direction === "corner"
     ) {
-      updates.width = Math.min(
-        maxWidth,
-        Math.max(
-          MIN_WIDTH,
-          state.startWidth + deltaX
-        )
+      updates.width = Math.max(
+        MIN_WIDTH,
+        state.startWidth + coordinateDeltaX
       );
     }
 
@@ -316,12 +306,9 @@ export default function DateField({
       state.direction === "bottom" ||
       state.direction === "corner"
     ) {
-      updates.height = Math.min(
-        maxHeight,
-        Math.max(
-          MIN_HEIGHT,
-          state.startHeight + deltaY
-        )
+      updates.height = Math.max(
+        MIN_HEIGHT,
+        state.startHeight + coordinateDeltaY
       );
     }
 
@@ -380,8 +367,6 @@ export default function DateField({
         top: field.y,
         width: field.width,
         height: field.height,
-        touchAction: "none",
-        userSelect: "none",
       }}
       onPointerDown={handleDragStart}
       onPointerMove={handleDragMove}
@@ -412,8 +397,7 @@ export default function DateField({
               );
             }}
           >
-            <span aria-hidden="true">⋮⋮</span>
-            <span>MOVE</span>
+            ⋮⋮
           </div>
 
           <span className="date-control-label">

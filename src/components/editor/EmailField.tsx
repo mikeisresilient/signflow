@@ -26,11 +26,11 @@ interface InteractionState {
   initialWidth: number;
   initialHeight: number;
 
-  direction?: "right" | "bottom" | "corner";
+  direction?:
+    | "right"
+    | "bottom"
+    | "corner";
 }
-
-const MIN_WIDTH = 120;
-const MIN_HEIGHT = 32;
 
 export default function EmailField({
   field,
@@ -42,54 +42,8 @@ export default function EmailField({
   const interactionRef =
     useRef<InteractionState | null>(null);
 
-  const [isEditing, setIsEditing] = useState(false);
-
-  /*
-   * --------------------------------------------------
-   * GET FIELD PARENT
-   * --------------------------------------------------
-   */
-
-  const getParentElement = (
-    element: HTMLElement
-  ): HTMLElement | null => {
-    return element.offsetParent as HTMLElement | null;
-  };
-
-  /*
-   * --------------------------------------------------
-   * GET RESPONSIVE SCALE
-   * --------------------------------------------------
-   *
-   * The editor can visually shrink on smaller screens.
-   * Field coordinates remain in the editor's internal
-   * coordinate system, so pointer movement must be
-   * converted back into that coordinate system.
-   */
-
-  const getScale = (
-    parent: HTMLElement
-  ) => {
-    const parentRect =
-      parent.getBoundingClientRect();
-
-    const scaleX =
-      parent.offsetWidth > 0
-        ? parentRect.width /
-          parent.offsetWidth
-        : 1;
-
-    const scaleY =
-      parent.offsetHeight > 0
-        ? parentRect.height /
-          parent.offsetHeight
-        : 1;
-
-    return {
-      x: Math.max(scaleX, 0.0001),
-      y: Math.max(scaleY, 0.0001),
-    };
-  };
+  const [isEditing, setIsEditing] =
+    useState(false);
 
   /*
    * --------------------------------------------------
@@ -103,28 +57,12 @@ export default function EmailField({
     const target =
       event.target as HTMLElement;
 
-    /*
-     * The MOVE handle is always allowed to initiate
-     * dragging.
-     *
-     * Inputs, controls, delete button and resize
-     * handles must keep their own interactions.
-     */
-    const isMoveHandle =
-      Boolean(
-        target.closest(
-          ".field-drag-handle"
-        )
-      );
-
     if (
-      !isMoveHandle &&
+      !target.closest(".field-drag-handle") &&
       (
         target.closest(".email-controls") ||
-        target.closest(
-          ".email-resize-handle"
-        ) ||
-        target.closest(".email-input") ||
+        target.closest(".email-resize-handle") ||
+      target.closest(".email-input") ||
         target.closest(".field-delete")
       )
     ) {
@@ -150,19 +88,20 @@ export default function EmailField({
       initialHeight: field.height,
     };
 
-    /*
-     * Capture the pointer on the field itself so dragging
-     * continues smoothly even if the pointer leaves the
-     * visible field.
-     */
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".email-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
 
   /*
    * --------------------------------------------------
-   * RESIZE START
+   * RESIZE
    * --------------------------------------------------
    */
 
@@ -194,7 +133,13 @@ export default function EmailField({
       direction,
     };
 
-    event.currentTarget.setPointerCapture(
+    const fieldElement =
+      ((event.currentTarget.closest(
+        ".email-field"
+      )) as HTMLDivElement | null) ??
+      event.currentTarget;
+
+    fieldElement.setPointerCapture(
       event.pointerId
     );
   };
@@ -222,44 +167,51 @@ export default function EmailField({
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-
     const deltaX =
       event.clientX - state.startX;
 
     const deltaY =
       event.clientY - state.startY;
 
-    const parent =
-      getParentElement(
-        event.currentTarget
-      );
-
-    if (!parent) {
-      return;
-    }
-
-    const scale =
-      getScale(parent);
-
     /*
-     * Convert screen pixels into the editor's
-     * internal coordinate system.
-     */
-    const coordinateDeltaX =
-      deltaX / scale.x;
-
-    const coordinateDeltaY =
-      deltaY / scale.y;
-
-    /*
-     * --------------------------------------------------
      * DRAG
-     * --------------------------------------------------
      */
 
     if (state.type === "drag") {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const parent =
+        event.currentTarget
+          .offsetParent as HTMLElement | null;
+
+      if (!parent) {
+        return;
+      }
+
+      const parentRect =
+        parent.getBoundingClientRect();
+
+      const scaleX =
+        parent.offsetWidth > 0
+          ? parentRect.width /
+            parent.offsetWidth
+          : 1;
+
+      const scaleY =
+        parent.offsetHeight > 0
+          ? parentRect.height /
+            parent.offsetHeight
+          : 1;
+
+      const coordinateDeltaX =
+        deltaX /
+        Math.max(scaleX, 0.0001);
+
+      const coordinateDeltaY =
+        deltaY /
+        Math.max(scaleY, 0.0001);
+
       const maxX = Math.max(
         0,
         parent.offsetWidth -
@@ -272,89 +224,73 @@ export default function EmailField({
           field.height
       );
 
-      const nextX = Math.min(
-        maxX,
-        Math.max(
-          0,
-          state.initialX +
-            coordinateDeltaX
-        )
-      );
-
-      const nextY = Math.min(
-        maxY,
-        Math.max(
-          0,
-          state.initialY +
-            coordinateDeltaY
-        )
-      );
-
       onUpdate(field.id, {
-        x: nextX,
-        y: nextY,
+        x: Math.min(
+          maxX,
+          Math.max(
+            0,
+            state.initialX +
+              coordinateDeltaX
+          )
+        ),
+
+        y: Math.min(
+          maxY,
+          Math.max(
+            0,
+            state.initialY +
+              coordinateDeltaY
+          )
+        ),
       });
 
       return;
     }
 
     /*
-     * --------------------------------------------------
      * RESIZE
-     * --------------------------------------------------
      */
+
+    const parent =
+      event.currentTarget.offsetParent as HTMLElement | null;
+
+    const scaleX =
+      parent && parent.offsetWidth > 0
+        ? parent.getBoundingClientRect().width / parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent && parent.offsetHeight > 0
+        ? parent.getBoundingClientRect().height / parent.offsetHeight
+        : 1;
+
+    const coordinateDeltaX =
+      deltaX / Math.max(scaleX, 0.0001);
+
+    const coordinateDeltaY =
+      deltaY / Math.max(scaleY, 0.0001);
 
     const updates: Partial<DocumentField> =
       {};
 
-    const maxWidth = Math.max(
-      MIN_WIDTH,
-      parent.offsetWidth -
-        state.initialX
-    );
-
-    const maxHeight = Math.max(
-      MIN_HEIGHT,
-      parent.offsetHeight -
-        state.initialY
-    );
-
-    /*
-     * Right handle
-     */
     if (
       state.direction === "right" ||
       state.direction === "corner"
     ) {
-      const nextWidth = Math.min(
-        maxWidth,
-        Math.max(
-          MIN_WIDTH,
-          state.initialWidth +
-            coordinateDeltaX
-        )
+      updates.width = Math.max(
+        120,
+        state.initialWidth + coordinateDeltaX
       );
-
-      updates.width = nextWidth;
     }
 
-    /*
-     * Bottom handle
-     */
     if (
       state.direction === "bottom" ||
       state.direction === "corner"
     ) {
-      const nextHeight = Math.min(
-        maxHeight,
-        Math.max(
-          MIN_HEIGHT,
-          state.initialHeight +
-            coordinateDeltaY
-        )
+      updates.height = Math.max(
+        32,
+        state.initialHeight + coordinateDeltaY
       );
-
-      updates.height = nextHeight;
     }
 
     onUpdate(
@@ -443,13 +379,10 @@ export default function EmailField({
           : ""
       }`}
       style={{
-        position: "absolute",
         left: field.x,
         top: field.y,
         width: field.width,
         height: field.height,
-        touchAction: "none",
-        boxSizing: "border-box",
       }}
       onPointerDown={
         handleDragStart
@@ -468,80 +401,50 @@ export default function EmailField({
       }
     >
       {selected && (
-        <>
-          {/* ---------------------------------------- */}
-          {/* MOVE HANDLE                              */}
-          {/* ---------------------------------------- */}
+        <div
+          className="email-controls"
+          onPointerDown={(event) =>
+            event.stopPropagation()
+          }
+          onClick={(event) =>
+            event.stopPropagation()
+          }
+        >
+          <span className="email-control-label">
+            Email
+          </span>
 
-          <div
-            className="field-drag-handle email-drag-handle"
-            role="button"
-            aria-label="Move email field"
-            title="Drag to move email field"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-
-              handleDragStart(
-                event as React.PointerEvent<HTMLDivElement>
-              );
-            }}
-            onPointerMove={
-              handlePointerMove
+          <button
+            type="button"
+            className="field-delete email-delete-button"
+            onPointerDown={
+              handleDelete
             }
-            onPointerUp={
-              handlePointerEnd
-            }
-            onPointerCancel={
-              handlePointerEnd
-            }
+            aria-label="Delete email field"
+            title="Delete email field"
           >
-            ⋮⋮ MOVE
-          </div>
-
-          {/* ---------------------------------------- */}
-          {/* CONTROLS                                 */}
-          {/* ---------------------------------------- */}
-
-          <div
-            className="email-controls"
-            onPointerDown={(event) =>
-              event.stopPropagation()
-            }
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <span className="email-control-label">
-              Email
-            </span>
-
-            <button
-              type="button"
-              className="field-delete email-delete-button"
-              onPointerDown={
-                handleDelete
-              }
-              aria-label="Delete email field"
-              title="Delete email field"
-            >
-              ×
-            </button>
-          </div>
-        </>
+            ×
+          </button>
+        </div>
       )}
 
-      {/* ---------------------------------------- */}
-      {/* EMAIL INPUT                              */}
-      {/* ---------------------------------------- */}
+      {selected && (
+        <div
+          className="field-drag-handle"
+          role="button"
+          aria-label="Move field"
+          title="Drag to move"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleDragStart(event);
+          }}
+        >
+          ⋮⋮
+        </div>
+      )}
 
-      <div
-        className="email-input-wrapper"
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-      >
+      <div className="email-input-wrapper">
         <input
           type="email"
           className={`email-input ${
@@ -567,21 +470,11 @@ export default function EmailField({
             event.stopPropagation()
           }
           aria-label="Email address"
-          style={{
-            width: "100%",
-            height: "100%",
-            boxSizing: "border-box",
-          }}
         />
       </div>
 
-      {/* ---------------------------------------- */}
-      {/* RESIZE HANDLES                           */}
-      {/* ---------------------------------------- */}
-
       {selected && (
         <>
-          {/* RIGHT */}
           <div
             className="email-resize-handle email-resize-right"
             onPointerDown={(event) =>
@@ -599,10 +492,8 @@ export default function EmailField({
             onPointerCancel={
               handlePointerEnd
             }
-            aria-label="Resize email field horizontally"
           />
 
-          {/* BOTTOM */}
           <div
             className="email-resize-handle email-resize-bottom"
             onPointerDown={(event) =>
@@ -620,10 +511,8 @@ export default function EmailField({
             onPointerCancel={
               handlePointerEnd
             }
-            aria-label="Resize email field vertically"
           />
 
-          {/* CORNER */}
           <div
             className="email-resize-handle email-resize-corner"
             onPointerDown={(event) =>
@@ -641,7 +530,6 @@ export default function EmailField({
             onPointerCancel={
               handlePointerEnd
             }
-            aria-label="Resize email field"
           />
         </>
       )}

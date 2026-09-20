@@ -3733,3 +3733,36 @@ body {
     padding-right: 2px;
   }
 }
+
+/* =========================================================
+   MOBILE / RESPONSIVE PDF FIELD COORDINATE SYSTEM
+   The editor stores PDF fields in a fixed 820px coordinate
+   system. The field layer must therefore be scaled visually,
+   not resized independently from the page.
+   ========================================================= */
+
+.pdf-page-wrapper > .field-layer {
+  left: 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 820px !important;
+  max-width: none !important;
+  min-width: 820px !important;
+  transform-origin: top left !important;
+  overflow: visible !important;
+}
+
+.pdf-page-wrapper .field-drag-handle {
+  pointer-events: auto !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+
+.pdf-page-wrapper .signature-controls,
+.pdf-page-wrapper .date-controls,
+.pdf-page-wrapper .checkbox-controls,
+.pdf-page-wrapper .name-controls,
+.pdf-page-wrapper .email-controls {
+  pointer-events: auto !important;
+}
