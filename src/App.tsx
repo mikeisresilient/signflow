@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   ArrowLeft,
@@ -32,7 +32,7 @@ import {
 } from "./utils/exportPdf";
 
 import {
-  downloadExportedImage,
+  exportImage,
 } from "./utils/exportImage";
 
 import {
@@ -130,26 +130,6 @@ function App() {
     useState<DocumentField[]>(
       [],
     );
-  const [past, setPast] =
-    useState<DocumentField[][]>([]);
-
-  const [future, setFuture] =
-    useState<DocumentField[][]>([]);
-
-  /*
-   * Mutable references let high-frequency drag, resize and typing
-   * updates always work from the latest field state without creating
-   * a separate history entry for every pointer movement or keystroke.
-   */
-  const fieldsRef =
-    useRef<DocumentField[]>([]);
-
-  const pendingHistoryRef =
-    useRef<DocumentField[] | null>(null);
-
-  const historyTimerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
-
 
   /*
    * Actual rendered DOCX page.
@@ -185,228 +165,6 @@ function App() {
     setIsExporting,
   ] =
     useState(false);
-
-  /* =========================================
-     HISTORY
-     ========================================= */
-
-  const cloneFields = (
-    source: DocumentField[],
-  ): DocumentField[] =>
-    source.map((field) => ({
-      ...field,
-    }));
-
-  const clearHistoryTimer = () => {
-    if (historyTimerRef.current) {
-      clearTimeout(historyTimerRef.current);
-      historyTimerRef.current = null;
-    }
-  };
-
-  const flushPendingHistory = () => {
-    clearHistoryTimer();
-
-    const previous =
-      pendingHistoryRef.current;
-
-    if (!previous) {
-      return;
-    }
-
-    const current =
-      fieldsRef.current;
-
-    if (
-      JSON.stringify(previous) !==
-      JSON.stringify(current)
-    ) {
-      setPast((history) => [
-        ...history,
-        cloneFields(previous),
-      ]);
-
-      setFuture([]);
-    }
-
-    pendingHistoryRef.current = null;
-  };
-
-  const scheduleHistoryCommit = () => {
-    clearHistoryTimer();
-
-    historyTimerRef.current =
-      setTimeout(() => {
-        flushPendingHistory();
-      }, 300);
-  };
-
-  const commitFieldsChange = (
-    nextFields: DocumentField[],
-  ) => {
-    flushPendingHistory();
-
-    const previous =
-      fieldsRef.current;
-
-    if (
-      JSON.stringify(previous) ===
-      JSON.stringify(nextFields)
-    ) {
-      return;
-    }
-
-    setPast((history) => [
-      ...history,
-      cloneFields(previous),
-    ]);
-
-    setFuture([]);
-
-    fieldsRef.current =
-      cloneFields(nextFields);
-
-    setFields(nextFields);
-  };
-
-  const undo = () => {
-    flushPendingHistory();
-
-    const history =
-      past;
-
-    if (history.length === 0) {
-      return;
-    }
-
-    const previous =
-      history[history.length - 1];
-
-    const current =
-      cloneFields(fieldsRef.current);
-
-    setPast(
-      history.slice(0, -1),
-    );
-
-    setFuture((redoHistory) => [
-      ...redoHistory,
-      current,
-    ]);
-
-    fieldsRef.current =
-      cloneFields(previous);
-
-    setFields(previous);
-  };
-
-  const redo = () => {
-    flushPendingHistory();
-
-    const history =
-      future;
-
-    if (history.length === 0) {
-      return;
-    }
-
-    const next =
-      history[history.length - 1];
-
-    const current =
-      cloneFields(fieldsRef.current);
-
-    setFuture(
-      history.slice(0, -1),
-    );
-
-    setPast((undoHistory) => [
-      ...undoHistory,
-      current,
-    ]);
-
-    fieldsRef.current =
-      cloneFields(next);
-
-    setFields(next);
-  };
-
-  /*
-   * Keyboard shortcuts:
-   * Ctrl/Cmd + Z       -> Undo
-   * Ctrl/Cmd + Shift Z -> Redo
-   * Ctrl + Y          -> Redo
-   */
-  useEffect(() => {
-    const handleKeyDown = (
-      event: KeyboardEvent,
-    ) => {
-      const modifier =
-        event.ctrlKey ||
-        event.metaKey;
-
-      if (!modifier) {
-        return;
-      }
-
-      const target =
-        event.target as HTMLElement | null;
-
-      const isEditable =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable;
-
-      /*
-       * Let the browser handle ordinary Ctrl/Cmd + Z inside text
-       * inputs. The editor buttons remain available for document-level
-       * undo while the user is editing a field.
-       */
-      if (
-        isEditable &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "z"
-      ) {
-        return;
-      }
-
-      if (
-        event.key.toLowerCase() === "z"
-      ) {
-        event.preventDefault();
-
-        if (event.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        return;
-      }
-
-      if (
-        event.key.toLowerCase() === "y" &&
-        event.ctrlKey
-      ) {
-        event.preventDefault();
-        redo();
-      }
-    };
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
-    };
-  }, [
-    past,
-    future,
-  ]);
 
   /* =========================================
      FILE TYPE
@@ -449,14 +207,7 @@ function App() {
      * Reset editor state when
      * opening a new document.
      */
-    clearHistoryTimer();
-    pendingHistoryRef.current = null;
-
     setFields([]);
-    fieldsRef.current = [];
-
-    setPast([]);
-    setFuture([]);
 
     setDocxDocumentElement(
       null,
@@ -528,18 +279,18 @@ function App() {
       )}`;
 
     /*
-     * The PDF editor works directly
-     * in displayed PDF coordinates.
+     * All field positions are stored in a
+     * document coordinate system.
      *
-     * The image editor passes a scale,
-     * so image fields are stored in
-     * original-image coordinates.
+     * PDF uses the fixed 820px editor width.
+     * Image fields use original image pixels.
+     * DOCX uses its fixed 820px page width.
      *
-     * DOCX passes its responsive
-     * display scale.
-     */
+     * The viewer converts screen coordinates
+     * into these coordinates before calling
+     * this function. */
     const safeScale =
-      scale > 0
+      Number.isFinite(scale) && scale > 0
         ? scale
         : 1;
 
@@ -617,12 +368,12 @@ function App() {
         : {}),
     };
 
-    const nextFields = [
-      ...fieldsRef.current,
-      newField,
-    ];
-
-    commitFieldsChange(nextFields);
+    setFields(
+      (currentFields) => [
+        ...currentFields,
+        newField,
+      ],
+    );
 
     setSelectedFieldId(
       newField.id,
@@ -639,46 +390,24 @@ function App() {
     id: string,
     updates: Partial<DocumentField>,
   ) => {
-    const currentFields =
-      fieldsRef.current;
+    setFields(
+      (currentFields) =>
+        currentFields.map(
+          (field) => {
+            if (
+              field.id !==
+              id
+            ) {
+              return field;
+            }
 
-    const nextFields =
-      currentFields.map(
-        (field) => {
-          if (field.id !== id) {
-            return field;
-          }
-
-          return {
-            ...field,
-            ...updates,
-          };
-        },
-      );
-
-    if (
-      JSON.stringify(currentFields) ===
-      JSON.stringify(nextFields)
-    ) {
-      return;
-    }
-
-    /*
-     * Capture the state before the first update in a continuous
-     * interaction. Pointer moves, resizing and typing are then grouped
-     * into one undoable action.
-     */
-    if (!pendingHistoryRef.current) {
-      pendingHistoryRef.current =
-        cloneFields(currentFields);
-    }
-
-    fieldsRef.current =
-      cloneFields(nextFields);
-
-    setFields(nextFields);
-
-    scheduleHistoryCommit();
+            return {
+              ...field,
+              ...updates,
+            };
+          },
+        ),
+    );
   };
 
   /* =========================================
@@ -707,24 +436,18 @@ function App() {
   const deleteField = (
     id: string,
   ) => {
-    const nextFields =
-      fieldsRef.current.filter(
-        (field) =>
-          field.id !== id,
-      );
-
-    if (
-      nextFields.length ===
-      fieldsRef.current.length
-    ) {
-      return;
-    }
-
-    commitFieldsChange(nextFields);
+    setFields(
+      (currentFields) =>
+        currentFields.filter(
+          (field) =>
+            field.id !== id,
+        ),
+    );
 
     setSelectedFieldId(
       (currentSelected) =>
-        currentSelected === id
+        currentSelected ===
+        id
           ? null
           : currentSelected,
     );
@@ -737,14 +460,7 @@ function App() {
   const handleBack = () => {
     setFile(null);
 
-    clearHistoryTimer();
-    pendingHistoryRef.current = null;
-
     setFields([]);
-    fieldsRef.current = [];
-
-    setPast([]);
-    setFuture([]);
 
     setDocxDocumentElement(
       null,
@@ -788,11 +504,9 @@ function App() {
          * Image export.
          */
         if (isImage) {
-          await downloadExportedImage(
-            {
-              file,
-              fields,
-            },
+          await exportImage(
+            file,
+            fields,
           );
 
           return;
@@ -824,8 +538,6 @@ function App() {
 
               fileName:
                 file.name,
-
-              fields,
             },
           );
 
@@ -861,17 +573,6 @@ function App() {
             selectedFieldId,
         )
       : null;
-
-  useEffect(() => {
-    fieldsRef.current =
-      cloneFields(fields);
-  }, [fields]);
-
-  useEffect(() => {
-    return () => {
-      clearHistoryTimer();
-    };
-  }, []);
 
   /* =========================================
      UPLOAD SCREEN
@@ -985,11 +686,6 @@ function App() {
             type="button"
             className="icon-button"
             aria-label="Undo"
-            title="Undo (Ctrl/Cmd + Z)"
-            onClick={undo}
-            disabled={
-              past.length === 0
-            }
           >
             <Undo2
               size={18}
@@ -1000,11 +696,6 @@ function App() {
             type="button"
             className="icon-button"
             aria-label="Redo"
-            title="Redo (Ctrl/Cmd + Shift + Z)"
-            onClick={redo}
-            disabled={
-              future.length === 0
-            }
           >
             <Redo2
               size={18}

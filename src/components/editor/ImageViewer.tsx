@@ -146,8 +146,8 @@ export default function ImageViewer({
 
       const availableWidth =
         Math.max(
+          1,
           parent.clientWidth - 32,
-          280,
         );
 
       const nextWidth =
@@ -250,6 +250,19 @@ export default function ImageViewer({
       event.clientY -
       rect.top;
 
+    /* Existing fields and their controls must never create
+       another field underneath the current interaction. */
+    const target =
+      event.target as HTMLElement;
+
+    if (
+      target.closest(
+        ".document-field, .signature-field, .date-field, .checkbox-field, .name-field, .email-field, .field-drag-handle, .field-delete, .field-resize-handle, .signature-resize-handle, .date-resize-handle, .checkbox-resize-handle, .name-resize-handle, .email-resize-handle"
+      )
+    ) {
+      return;
+    }
+
     const displayFieldWidth =
       activeTool === "signature"
         ? 320
@@ -272,22 +285,14 @@ export default function ImageViewer({
 
     const clampedDisplayX =
       Math.min(
-        Math.max(
-          0,
-          rect.width -
-            displayFieldWidth
-        ),
-        Math.max(0, displayX)
+        Math.max(0, rect.width - displayFieldWidth),
+        Math.max(0, displayX),
       );
 
     const clampedDisplayY =
       Math.min(
-        Math.max(
-          0,
-          rect.height -
-            displayFieldHeight
-        ),
-        Math.max(0, displayY)
+        Math.max(0, rect.height - displayFieldHeight),
+        Math.max(0, displayY),
       );
 
     const x =

@@ -7,21 +7,70 @@ import {
   Paragraph,
 } from "docx";
 
-import type { DocumentField } from "../types/document";
-
 interface ExportDocxOptions {
   element: HTMLElement;
   fileName?: string;
-  fields?: DocumentField[];
 }
 
 const DOCUMENT_WIDTH = 820;
+const MIN_DOCUMENT_HEIGHT = 1120;
 
-const DOCX_PAGE_WIDTH = 11906;
-const DOCX_PAGE_HEIGHT = 16838;
+/*
+ * DOCX uses twips.
+ *
+ * We keep the exported page at the same
+ * aspect ratio as the SignFlow document
+ * canvas instead of forcing the captured
+ * image into a different page ratio.
+ */
+const TWIPS_PER_PIXEL = 14.52;
 
-const DOCX_IMAGE_WIDTH = 620;
-const DOCX_IMAGE_HEIGHT = 847;
+const getDocumentHeight = (
+  element: HTMLElement,
+): number => {
+  const height = Math.max(
+    element.scrollHeight,
+    element.offsetHeight,
+    MIN_DOCUMENT_HEIGHT,
+  );
+
+  return Math.max(
+    MIN_DOCUMENT_HEIGHT,
+    Math.ceil(height),
+  );
+};
+
+const downloadBlob = (
+  blob: Blob,
+  fileName: string,
+) => {
+  const url =
+    URL.createObjectURL(blob);
+
+  const downloadLink =
+    window.document.createElement("a");
+
+  downloadLink.href = url;
+
+  downloadLink.download =
+    fileName
+      .toLowerCase()
+      .endsWith(".docx")
+      ? fileName
+      : `${fileName}.docx`;
+
+  window.document.body.appendChild(
+    downloadLink,
+  );
+
+  downloadLink.click();
+
+  downloadLink.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+};
 
 export async function downloadExportedDocx({
   element,
@@ -34,12 +83,21 @@ export async function downloadExportedDocx({
   }
 
   /*
-   * Capture the actual SignFlow
-   * document page.
+   * IMPORTANT:
    *
-   * This preserves the exact visual
-   * position of every field.
+   * SignFlow visually scales the DOCX page
+   * on smaller devices using CSS transform.
+   *
+   * We must NOT export that visual scale.
+   *
+   * Instead, html2canvas captures the page
+   * in its fixed 820px internal coordinate
+   * system. This makes the exported result
+   * independent of the device used for editing.
    */
+  const documentHeight =
+    getDocumentHeight(element);
+
   const canvas =
     await html2canvas(
       element,
@@ -51,10 +109,7 @@ export async function downloadExportedDocx({
           DOCUMENT_WIDTH,
 
         height:
-          Math.max(
-            element.scrollHeight,
-            1120,
-          ),
+          documentHeight,
 
         scale: 2,
 
@@ -64,16 +119,84 @@ export async function downloadExportedDocx({
 
         logging: false,
 
-        /*
-         * The cloned DOM is used only
-         * for the exported image.
-         *
-         * Editor controls are removed
-         * from the exported version.
-         */
         onclone: (
           clonedDocument,
         ) => {
+          /*
+           * Remove the responsive visual
+           * transform from the cloned page.
+           *
+           * The live editor may currently be
+           * scaled to 40%, 60%, etc. on mobile.
+           * Export must always use the internal
+           * 820px document coordinates.
+           */
+          const clonedPage =
+            clonedDocument.querySelector(
+              ".docx-page",
+            ) as HTMLElement | null;
+
+          if (clonedPage) {
+            clonedPage.style.transform =
+              "none";
+
+            clonedPage.style.transformOrigin =
+              "top left";
+
+            clonedPage.style.position =
+              "relative";
+
+            clonedPage.style.top =
+              "0";
+
+            clonedPage.style.left =
+              "0";
+
+            clonedPage.style.width =
+              `${DOCUMENT_WIDTH}px`;
+
+            clonedPage.style.minWidth =
+              `${DOCUMENT_WIDTH}px`;
+
+            clonedPage.style.maxWidth =
+              `${DOCUMENT_WIDTH}px`;
+
+            clonedPage.style.minHeight =
+              `${documentHeight}px`;
+
+            clonedPage.style.height =
+              `${documentHeight}px`;
+
+            clonedPage.style.margin =
+              "0";
+
+            clonedPage.style.overflow =
+              "visible";
+          }
+
+          /*
+           * Hide the visual editor frame.
+           * The exported page should start
+           * directly at the document itself.
+           */
+          const visualFrames =
+            clonedDocument.querySelectorAll(
+              ".docx-document > div",
+            );
+
+          visualFrames.forEach(
+            (frame) => {
+              const htmlFrame =
+                frame as HTMLElement;
+
+              htmlFrame.style.transform =
+                "none";
+            },
+          );
+
+          /*
+           * Remove editor-only controls.
+           */
           const controls =
             clonedDocument.querySelectorAll(
               [
@@ -82,6 +205,7 @@ export async function downloadExportedDocx({
                 ".resize-handle-right",
                 ".resize-handle-bottom",
                 ".resize-handle-corner",
+                ".field-drag-handle",
               ].join(","),
             );
 
@@ -95,8 +219,7 @@ export async function downloadExportedDocx({
           );
 
           /*
-           * Hide buttons inside fields,
-           * such as delete/clear controls.
+           * Hide buttons inside fields.
            */
           const buttons =
             clonedDocument.querySelectorAll(
@@ -113,9 +236,8 @@ export async function downloadExportedDocx({
           );
 
           /*
-           * Remove visual selection
-           * indicators from the exported
-           * copy where applicable.
+           * Remove editor selection
+           * indicators.
            */
           const selectedElements =
             clonedDocument.querySelectorAll(
@@ -137,7 +259,7 @@ export async function downloadExportedDocx({
     );
 
   /*
-   * Convert the canvas to PNG.
+   * Convert the captured page to PNG.
    */
   const imageData =
     canvas.toDataURL(
@@ -153,10 +275,6 @@ export async function downloadExportedDocx({
     );
   }
 
-  /*
-   * Convert base64 PNG data
-   * into a Uint8Array.
-   */
   const binary =
     window.atob(base64);
 
@@ -175,14 +293,28 @@ export async function downloadExportedDocx({
   }
 
   /*
-   * IMPORTANT:
-   *
-   * The image must be inside an
-   * actual Paragraph instance.
-   *
-   * Do NOT replace this with a
-   * plain object or "as never".
+   * Keep the DOCX page and image at
+   * exactly the same aspect ratio as
+   * the captured SignFlow page.
    */
+  const pageWidthTwips =
+    Math.round(
+      DOCUMENT_WIDTH *
+        TWIPS_PER_PIXEL,
+    );
+
+  const pageHeightTwips =
+    Math.round(
+      documentHeight *
+        TWIPS_PER_PIXEL,
+    );
+
+  const imageWidthTwips =
+    pageWidthTwips;
+
+  const imageHeightTwips =
+    pageHeightTwips;
+
   const imageParagraph =
     new Paragraph({
       children: [
@@ -193,10 +325,14 @@ export async function downloadExportedDocx({
 
           transformation: {
             width:
-              DOCX_IMAGE_WIDTH,
+              Math.round(
+                DOCUMENT_WIDTH,
+              ),
 
             height:
-              DOCX_IMAGE_HEIGHT,
+              Math.round(
+                documentHeight,
+              ),
           },
         }),
       ],
@@ -209,7 +345,12 @@ export async function downloadExportedDocx({
     });
 
   /*
-   * Create a valid DOCX document.
+   * Create a page whose dimensions
+   * match the captured document.
+   *
+   * This prevents the previous
+   * 620x847 image from being stretched
+   * into a different page ratio.
    */
   const exportedDocument =
     new Document({
@@ -219,10 +360,10 @@ export async function downloadExportedDocx({
             page: {
               size: {
                 width:
-                  DOCX_PAGE_WIDTH,
+                  pageWidthTwips,
 
                 height:
-                  DOCX_PAGE_HEIGHT,
+                  pageHeightTwips,
               },
 
               margin: {
@@ -241,56 +382,21 @@ export async function downloadExportedDocx({
       ],
     });
 
-  /*
-   * Generate the actual DOCX blob.
-   */
   const blob =
     await Packer.toBlob(
       exportedDocument,
     );
 
   /*
-   * Download the DOCX.
+   * Keep these values referenced so
+   * the intended one-to-one page/image
+   * relationship remains explicit.
    */
-  const url =
-    URL.createObjectURL(
-      blob,
-    );
+  void imageWidthTwips;
+  void imageHeightTwips;
 
-  const downloadLink =
-    window.document.createElement(
-      "a",
-    );
-
-  downloadLink.href =
-    url;
-
-  downloadLink.download =
-    fileName
-      .toLowerCase()
-      .endsWith(".docx")
-      ? fileName
-      : `${fileName}.docx`;
-
-  window.document.body.appendChild(
-    downloadLink,
-  );
-
-  downloadLink.click();
-
-  downloadLink.remove();
-
-  /*
-   * Give the browser a moment to
-   * consume the object URL before
-   * releasing it.
-   */
-  window.setTimeout(
-    () => {
-      URL.revokeObjectURL(
-        url,
-      );
-    },
-    1000,
+  downloadBlob(
+    blob,
+    fileName,
   );
 }

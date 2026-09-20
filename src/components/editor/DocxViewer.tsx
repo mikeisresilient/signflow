@@ -427,7 +427,7 @@ export default function DocxViewer({
      */
     if (
       target.closest(
-        ".document-field",
+        ".document-field, .field-drag-handle, .field-delete, .field-resize-handle, .signature-resize-handle, .date-resize-handle, .checkbox-resize-handle, .name-resize-handle, .email-resize-handle, button, input, textarea, select",
       )
     ) {
       return;
@@ -657,7 +657,7 @@ export default function DocxViewer({
       style={{
         width: "100%",
         maxWidth: "100%",
-        overflow: "visible",
+        overflow: "hidden",
         boxSizing: "border-box",
       }}
     >
@@ -675,7 +675,7 @@ export default function DocxViewer({
             `${DOCUMENT_WIDTH * documentScale}px`,
 
           height:
-            `${documentHeight * documentScale}px`,
+            `${documentHeight * documentScale + 56}px`,
 
           maxWidth:
             "100%",
@@ -716,7 +716,7 @@ export default function DocxViewer({
             position:
               "absolute",
 
-            top: 0,
+            top: 56,
             left: 0,
 
             width:

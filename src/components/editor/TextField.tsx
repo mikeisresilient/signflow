@@ -401,11 +401,11 @@ export default function TextField({
      * Resize handles have their own
      * pointer behavior.
      */
+    const target = event.target as HTMLElement;
+
     if (
-      (
-        event.target as HTMLElement
-      ).closest(
-        ".field-resize-handle"
+      target.closest(
+        ".field-resize-handle, .field-delete, .field-drag-handle"
       )
     ) {
       return;
@@ -613,6 +613,9 @@ export default function TextField({
       return;
     }
 
+    event.preventDefault();
+    event.stopPropagation();
+
     const deltaX =
       event.clientX -
       resizeStart.current.x;
@@ -745,6 +748,7 @@ export default function TextField({
           width: `${field.width}px`,
           minHeight: `${field.height}px`,
           height: `${field.height}px`,
+          touchAction: "none",
         }}
         onPointerDown={
           handlePointerDown
@@ -785,6 +789,7 @@ export default function TextField({
           }}
           onPointerDown={(event) => {
             event.stopPropagation();
+            onSelect(field.id);
           }}
           onClick={(event) => {
             event.stopPropagation();
@@ -801,6 +806,7 @@ export default function TextField({
               role="button"
               aria-label="Move text field"
               title="Drag to move"
+              style={{ touchAction: "none" }}
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();

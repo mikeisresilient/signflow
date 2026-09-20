@@ -558,28 +558,52 @@ export default function SignatureField({
     const parentRect =
       parent.getBoundingClientRect();
 
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width /
+          parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height /
+          parent.offsetHeight
+        : 1;
+
     const newX =
-      event.clientX -
-      parentRect.left -
-      dragState.current
-        .offsetX;
+      (event.clientX -
+        parentRect.left -
+        dragState.current.offsetX) /
+      Math.max(scaleX, 0.0001);
 
     const newY =
-      event.clientY -
-      parentRect.top -
-      dragState.current
-        .offsetY;
+      (event.clientY -
+        parentRect.top -
+        dragState.current.offsetY) /
+      Math.max(scaleY, 0.0001);
+
+    const maxX = Math.max(
+      0,
+      parent.offsetWidth -
+        Math.max(MIN_WIDTH, field.width),
+    );
+
+    const maxY = Math.max(
+      0,
+      parent.offsetHeight -
+        Math.max(MIN_HEIGHT, field.height),
+    );
 
     onUpdate(
       field.id,
       {
-        x: Math.max(
-          0,
-          newX,
+        x: Math.min(
+          maxX,
+          Math.max(0, newX),
         ),
-        y: Math.max(
-          0,
-          newY,
+        y: Math.min(
+          maxY,
+          Math.max(0, newY),
         ),
       },
     );
@@ -910,8 +934,45 @@ export default function SignatureField({
       }}
     >
       {selected && (
-        <div
-          className="signature-controls"
+        <>
+          <div
+            className="field-drag-handle signature-drag-handle"
+            role="button"
+            aria-label="Move signature field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+
+              onSelect(field.id);
+
+              const element =
+                ((event.currentTarget.parentElement?.closest(
+                  ".signature-field"
+                ) as HTMLDivElement | null) ??
+                  event.currentTarget.parentElement) as HTMLDivElement;
+
+              const rect =
+                element.getBoundingClientRect();
+
+              dragState.current = {
+                offsetX: event.clientX - rect.left,
+                offsetY: event.clientY - rect.top,
+              };
+
+              element.setPointerCapture(
+                event.pointerId,
+              );
+            }}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
+          >
+            ⋮⋮
+          </div>
+
+          <div
+            className="signature-controls"
           onPointerDown={(event) =>
             event.stopPropagation()
           }
@@ -986,6 +1047,7 @@ export default function SignatureField({
             ×
           </button>
         </div>
+        </>
       )}
 
       {mode === "draw" && (

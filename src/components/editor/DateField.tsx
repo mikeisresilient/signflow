@@ -259,11 +259,43 @@ export default function DateField({
     event.preventDefault();
     event.stopPropagation();
 
+    const parent =
+      event.currentTarget.offsetParent as HTMLElement | null;
+
+    if (!parent) {
+      return;
+    }
+
+    const parentRect =
+      parent.getBoundingClientRect();
+
+    const scaleX =
+      parent.offsetWidth > 0
+        ? parentRect.width / parent.offsetWidth
+        : 1;
+
+    const scaleY =
+      parent.offsetHeight > 0
+        ? parentRect.height / parent.offsetHeight
+        : 1;
+
     const deltaX =
-      event.clientX - state.startX;
+      (event.clientX - state.startX) /
+      Math.max(scaleX, 0.0001);
 
     const deltaY =
-      event.clientY - state.startY;
+      (event.clientY - state.startY) /
+      Math.max(scaleY, 0.0001);
+
+    const maxWidth = Math.max(
+      MIN_WIDTH,
+      parent.offsetWidth - field.x
+    );
+
+    const maxHeight = Math.max(
+      MIN_HEIGHT,
+      parent.offsetHeight - field.y
+    );
 
     const updates: Partial<DocumentField> = {};
 
@@ -271,9 +303,12 @@ export default function DateField({
       state.direction === "right" ||
       state.direction === "corner"
     ) {
-      updates.width = Math.max(
-        MIN_WIDTH,
-        state.startWidth + deltaX
+      updates.width = Math.min(
+        maxWidth,
+        Math.max(
+          MIN_WIDTH,
+          state.startWidth + deltaX
+        )
       );
     }
 
@@ -281,9 +316,12 @@ export default function DateField({
       state.direction === "bottom" ||
       state.direction === "corner"
     ) {
-      updates.height = Math.max(
-        MIN_HEIGHT,
-        state.startHeight + deltaY
+      updates.height = Math.min(
+        maxHeight,
+        Math.max(
+          MIN_HEIGHT,
+          state.startHeight + deltaY
+        )
       );
     }
 
@@ -351,22 +389,6 @@ export default function DateField({
     >
       {selected && (
         <div
-          className="field-drag-handle"
-            role="button"
-            aria-label="Move date field"
-            title="Drag to move"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleDragStart(event);
-            }}
-        >
-          ⋮⋮
-        </div>
-      )}
-
-      {selected && (
-        <div
           className="date-controls"
           onPointerDown={(event) =>
             event.stopPropagation()
@@ -375,6 +397,21 @@ export default function DateField({
             event.stopPropagation()
           }
         >
+          <div
+            className="field-drag-handle"
+            role="button"
+            aria-label="Move date field"
+            title="Drag to move"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleDragStart(
+                event
+              );
+            }}
+          >
+            ⋮⋮
+          </div>
 
           <span className="date-control-label">
             Date

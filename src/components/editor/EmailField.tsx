@@ -62,7 +62,7 @@ export default function EmailField({
       (
         target.closest(".email-controls") ||
         target.closest(".email-resize-handle") ||
-      target.closest(".email-input") ||
+        target.closest(".email-input") ||
         target.closest(".field-delete")
       )
     ) {
@@ -88,13 +88,7 @@ export default function EmailField({
       initialHeight: field.height,
     };
 
-    const fieldElement =
-      ((event.target as HTMLElement).closest(
-        ".email-field"
-      ) as HTMLDivElement | null) ??
-      event.currentTarget;
-
-    fieldElement.setPointerCapture(
+    event.currentTarget.setPointerCapture(
       event.pointerId
     );
   };
@@ -175,66 +169,15 @@ export default function EmailField({
       event.preventDefault();
       event.stopPropagation();
 
-      const parent =
-        event.currentTarget
-          .offsetParent as HTMLElement | null;
-
-      if (!parent) {
-        return;
-      }
-
-      const parentRect =
-        parent.getBoundingClientRect();
-
-      const scaleX =
-        parent.offsetWidth > 0
-          ? parentRect.width /
-            parent.offsetWidth
-          : 1;
-
-      const scaleY =
-        parent.offsetHeight > 0
-          ? parentRect.height /
-            parent.offsetHeight
-          : 1;
-
-      const coordinateDeltaX =
-        deltaX /
-        Math.max(scaleX, 0.0001);
-
-      const coordinateDeltaY =
-        deltaY /
-        Math.max(scaleY, 0.0001);
-
-      const maxX = Math.max(
-        0,
-        parent.offsetWidth -
-          field.width
-      );
-
-      const maxY = Math.max(
-        0,
-        parent.offsetHeight -
-          field.height
-      );
-
       onUpdate(field.id, {
-        x: Math.min(
-          maxX,
-          Math.max(
-            0,
-            state.initialX +
-              coordinateDeltaX
-          )
+        x: Math.max(
+          0,
+          state.initialX + deltaX
         ),
 
-        y: Math.min(
-          maxY,
-          Math.max(
-            0,
-            state.initialY +
-              coordinateDeltaY
-          )
+        y: Math.max(
+          0,
+          state.initialY + deltaY
         ),
       });
 
@@ -377,22 +320,6 @@ export default function EmailField({
     >
       {selected && (
         <div
-          className="field-drag-handle"
-            role="button"
-            aria-label="Move field"
-            title="Drag to move"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              handleDragStart(event);
-            }}
-        >
-          ⋮⋮
-        </div>
-      )}
-
-      {selected && (
-        <div
           className="email-controls"
           onPointerDown={(event) =>
             event.stopPropagation()
@@ -401,7 +328,6 @@ export default function EmailField({
             event.stopPropagation()
           }
         >
-
           <span className="email-control-label">
             Email
           </span>
