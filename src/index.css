@@ -2999,533 +2999,306 @@ textarea:focus-visible {
 }
 
 
-/* =========================================
-   SIGNFLOW RESPONSIVE PASS — 2026
-   =========================================
 
-   This layer improves the existing editor without
-   changing document coordinate logic or field behavior.
-*/
+/* =========================================================
+   SIGNFLOW FINAL FIELD UI + RESPONSIVE RECTIFICATION
+   ========================================================= */
 
-/* Prevent horizontal page overflow while keeping the editor canvas scrollable. */
-html,
-body,
-#root {
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.app {
-  width: 100%;
-  max-width: 100vw;
-  min-width: 0;
-}
-
-.topbar,
-.workspace {
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-}
-
-.topbar-left,
-.topbar-right,
-.topbar-center {
-  min-width: 0;
-}
-
-.topbar-left {
-  flex: 1 1 auto;
-}
-
-.topbar-right {
-  flex: 0 0 auto;
-}
-
-.document-title {
-  min-width: 0;
-}
-
+/* The editor canvas is the workspace. The document itself
+   stays white so there is no unwanted grey strip around it. */
 .canvas-area {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  background: #ffffff !important;
+  overflow: auto !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.document-page {
-  min-width: 0;
-}
-
-/* Keep document pages visually centered without forcing horizontal overflow. */
 .pdf-document,
-.docx-viewer,
-.image-document {
-  min-width: 0;
+.docx-document {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: visible !important;
 }
 
-.pdf-page-wrapper,
-.docx-page,
-.image-page-wrapper {
-  box-sizing: border-box;
+.pdf-page-wrapper {
+  position: relative !important;
+  display: block !important;
+  width: min(100%, 850px) !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  background: #fff !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
 }
 
-/* The document itself may shrink to the available viewport. */
-.pdf-page-wrapper canvas,
-.image-document-image {
-  max-width: 100%;
-  height: auto;
+.pdf-page-wrapper canvas {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
 }
 
-/* =========================================
-   TABLET
-   ========================================= */
-
-@media (max-width: 1100px) {
-  .workspace {
-    grid-template-columns: 160px minmax(0, 1fr) 210px;
-  }
-
-  .sidebar,
-  .properties {
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-
-  .canvas-area {
-    padding: 28px 24px;
-  }
-
-  .document-page {
-    width: min(100%, 850px);
-  }
+.field-layer,
+.docx-field-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+  z-index: 20 !important;
 }
 
-/* =========================================
-   SMALL TABLET / PORTRAIT TABLET
-   ========================================= */
-
-@media (max-width: 900px) {
-  .workspace {
-    grid-template-columns: 150px minmax(0, 1fr);
-  }
-
-  .properties {
-    display: none;
-  }
-
-  .sidebar {
-    min-width: 0;
-    overflow-y: auto;
-  }
-
-  .canvas-area {
-    padding: 24px 18px;
-  }
-
-  .document-page {
-    width: 100%;
-    max-width: 850px;
-  }
-
-  .topbar {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .document-title {
-    max-width: min(34vw, 240px);
-  }
+.document-field,
+.signature-field,
+.date-field,
+.checkbox-field,
+.name-field,
+.email-field {
+  overflow: visible !important;
+  box-sizing: border-box !important;
 }
 
-/* =========================================
-   MOBILE EDITOR
-   ========================================= */
-
-@media (max-width: 650px) {
-  html,
-  body,
-  #root {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .app {
-    height: 100dvh;
-    min-height: 100dvh;
-  }
-
-  .topbar {
-    height: 58px;
-    min-height: 58px;
-    padding: 0 8px;
-    gap: 6px;
-  }
-
-  .topbar-left {
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .topbar-right {
-    gap: 4px;
-  }
-
-  .topbar-center {
-    display: none;
-  }
-
-  .icon-button {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    flex: 0 0 38px;
-  }
-
-  .document-title {
-    flex: 1 1 auto;
-    max-width: none;
-    min-width: 0;
-    gap: 6px;
-    font-size: 13px;
-  }
-
-  .document-title svg:last-child {
-    flex: 0 0 auto;
-  }
-
-  .secondary-button {
-    display: none;
-  }
-
-  .primary-button {
-    min-height: 38px;
-    padding: 9px 11px;
-    white-space: nowrap;
-    flex: 0 0 auto;
-  }
-
-  .workspace {
-    display: block;
-    position: relative;
-    height: calc(100dvh - 58px);
-    min-height: 0;
-  }
-
-  .canvas-area {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    padding: 14px 8px 92px;
-    overflow: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .document-page {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    margin: 0 auto;
-  }
-
-  /* Bottom tool dock becomes horizontally scrollable instead of squeezing 7 tools. */
-  .sidebar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: auto;
-    min-height: 72px;
-    max-height: 84px;
-    z-index: 1000;
-    padding: 6px 7px max(6px, env(safe-area-inset-bottom));
-    border: 0;
-    border-top: 1px solid #e1e1dc;
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .sidebar-heading {
-    display: none;
-  }
-
-  .tools {
-    width: max-content;
-    min-width: 100%;
-    height: 100%;
-    flex-direction: row;
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: 4px;
-  }
-
-  .tool {
-    width: 62px;
-    min-width: 62px;
-    flex: 0 0 62px;
-    min-height: 58px;
-    padding: 7px 4px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border-radius: 9px;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-
-  .tool svg {
-    flex: 0 0 auto;
-  }
-
-  .canvas-area .pdf-page-wrapper {
-    width: fit-content;
-    max-width: 100%;
-  }
-
-  .pdf-page-wrapper canvas {
-    width: auto;
-    max-width: 100%;
-    height: auto;
-  }
-
-  .document-placeholder {
-    min-height: 65vh;
-    padding: 28px 18px;
-  }
-
-  .document-placeholder h2 {
-    max-width: 100%;
-    font-size: 16px;
-    overflow-wrap: anywhere;
-  }
-
-  .document-placeholder p {
-    max-width: 320px;
-    line-height: 1.5;
-  }
-
-  /* Keep field text usable while allowing the field itself to remain resizable. */
-  .document-field textarea,
-  .name-input,
-  .email-input,
-  .date-field-content input {
-    font-size: 14px;
-  }
-
-  /* Field controls must stay inside the viewport when possible. */
-  .signature-controls,
-  .date-controls,
-  .checkbox-controls,
-  .name-controls,
-  .email-controls {
-    max-width: min(92vw, 360px);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .signature-controls::-webkit-scrollbar,
-  .date-controls::-webkit-scrollbar,
-  .checkbox-controls::-webkit-scrollbar,
-  .name-controls::-webkit-scrollbar,
-  .email-controls::-webkit-scrollbar {
-    display: none;
-  }
-
-  .signature-controls {
-    top: -44px;
-  }
-
-  .date-controls,
-  .checkbox-controls,
-  .name-controls,
-  .email-controls {
-    top: -42px;
-  }
-
-  /* Avoid editor controls being clipped by the viewport edges. */
-  .field-delete {
-    z-index: 500;
-  }
+.document-field-selected,
+.signature-field-selected,
+.date-field-selected,
+.checkbox-field-selected,
+.name-field-selected,
+.email-field-selected {
+  z-index: 1000 !important;
 }
 
-/* =========================================
-   SMALL PHONES
-   ========================================= */
-
-@media (max-width: 400px) {
-  .topbar {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
-
-  .icon-button {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    flex-basis: 34px;
-  }
-
-  .document-title {
-    font-size: 12px;
-    gap: 5px;
-  }
-
-  .primary-button {
-    min-width: 38px;
-    width: 38px;
-    padding: 8px;
-    gap: 0;
-    font-size: 0;
-  }
-
-  .primary-button svg {
-    width: 17px;
-    height: 17px;
-  }
-
-  .canvas-area {
-    padding: 10px 5px 92px;
-  }
-
-  .tool {
-    width: 58px;
-    min-width: 58px;
-    flex-basis: 58px;
-    font-size: 9px;
-  }
-
-  .signature-controls,
-  .date-controls,
-  .checkbox-controls,
-  .name-controls,
-  .email-controls {
-    max-width: calc(100vw - 16px);
-  }
-
-  .signature-type-area input {
-    font-size: 22px;
-  }
-}
-
-/* =========================================
-   VERY SMALL PHONES
-   ========================================= */
-
-@media (max-width: 340px) {
-  .document-title svg:first-child {
-    display: none;
-  }
-
-  .tool {
-    width: 56px;
-    min-width: 56px;
-    flex-basis: 56px;
-  }
-}
-
-/* =========================================
-   TOUCH / MOBILE INTERACTION
-   ========================================= */
-
-@media (pointer: coarse) {
-  .tool,
-  .icon-button,
-  .primary-button,
-  .secondary-button,
-  .property-delete {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .tool {
-    min-height: 52px;
-  }
-}
-
-
-/* =========================================
-   FIELD DRAG HANDLES
-   ========================================= */
-
+/* Drag identifier: outside the content area. It never sits over
+   text, signature drawing, checkbox, date input or other content. */
 .field-drag-handle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 28px;
-  height: 22px;
-
-  flex: 0 0 auto;
-
-  border: 1px solid #d5d5d0;
-  border-radius: 5px;
-
-  background: #f7f7f4;
-  color: #555;
-
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-
-  z-index: 500;
+  position: absolute !important;
+  left: 0 !important;
+  top: calc(100% + 7px) !important;
+  width: 34px !important;
+  height: 24px !important;
+  min-width: 34px !important;
+  min-height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  border: 1px solid #d0d0cb !important;
+  border-radius: 6px !important;
+  background: #181818 !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: -2px !important;
+  cursor: grab !important;
+  touch-action: none !important;
+  user-select: none !important;
+  z-index: 5000 !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,.16) !important;
 }
 
 .field-drag-handle:active {
-  cursor: grabbing;
+  cursor: grabbing !important;
 }
 
-.document-field > .field-drag-handle {
-  position: absolute;
-
-  top: 3px;
-  left: 50%;
-
-  transform: translateX(-50%);
+/* The control bar is outside the field, below it. This prevents
+   controls from covering typed content and prevents top-edge clipping. */
+.signature-controls,
+.date-controls,
+.checkbox-controls,
+.name-controls,
+.email-controls {
+  position: absolute !important;
+  left: 42px !important;
+  top: calc(100% + 7px) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  width: max-content !important;
+  max-width: min(360px, calc(100vw - 58px)) !important;
+  min-height: 30px !important;
+  box-sizing: border-box !important;
+  padding: 4px 6px !important;
+  border: 1px solid #d8d8d3 !important;
+  border-radius: 7px !important;
+  background: rgba(255,255,255,.98) !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,.14) !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  z-index: 4500 !important;
 }
 
-.signature-drag-handle {
-  position: absolute;
-
-  left: 6px;
-  top: -34px;
+.signature-controls {
+  left: 42px !important;
 }
 
-.signature-drag-handle.field-drag-handle {
-  width: 30px;
-  height: 22px;
+.signature-controls button,
+.signature-controls label,
+.date-controls span,
+.checkbox-controls span,
+.name-controls span,
+.email-controls span {
+  flex: 0 0 auto !important;
 }
 
-.name-controls .field-drag-handle,
-.email-controls .field-drag-handle,
-.date-controls .field-drag-handle,
-.checkbox-controls .field-drag-handle {
-  position: static;
-  transform: none;
+/* Delete buttons must remain above every other field/control. */
+.field-delete,
+.signature-delete-button,
+.date-delete-button,
+.checkbox-delete-button,
+.name-delete-button,
+.email-delete-button {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  left: auto !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  flex: 0 0 26px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  margin-left: 3px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: #181818 !important;
+  color: #fff !important;
+  font-size: 19px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  z-index: 6000 !important;
 }
 
+/* Never let editor chrome intercept the actual content. */
+.signature-controls input[type="file"],
+.signature-controls button,
+.signature-controls label,
+.date-controls,
+.checkbox-controls,
+.name-controls,
+.email-controls {
+  touch-action: manipulation;
+}
+
+/* DOCX page: no clipping of field chrome. */
+.docx-page {
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+.docx-document {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+/* Image editor: keep the actual image and field layer as one
+   responsive white document, never a grey frame. */
+.image-document,
+.image-frame,
+.image-page,
+.image-wrapper {
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+/* Do not force a desktop minimum width on fields on phones. */
 @media (max-width: 650px) {
+  .canvas-area {
+    padding: 12px 4px 92px !important;
+    background: #fff !important;
+  }
+
+  .document-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .pdf-page-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: 42px !important;
+  }
+
+  .document-field {
+    min-width: 0 !important;
+  }
+
   .field-drag-handle {
-    min-width: 30px;
-    width: 30px;
-    height: 24px;
-
-    font-size: 11px;
+    width: 36px !important;
+    height: 26px !important;
+    min-width: 36px !important;
+    min-height: 26px !important;
+    top: calc(100% + 6px) !important;
+    font-size: 14px !important;
   }
 
-  .document-field > .field-drag-handle {
-    top: 3px;
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    left: 42px !important;
+    top: calc(100% + 6px) !important;
+    max-width: calc(100vw - 58px) !important;
+    min-height: 30px !important;
   }
 
-  .signature-drag-handle {
-    top: -36px;
+  .field-delete,
+  .signature-delete-button,
+  .date-delete-button,
+  .checkbox-delete-button,
+  .name-delete-button,
+  .email-delete-button {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    font-size: 20px !important;
+  }
+
+  .docx-document {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .canvas-area {
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+  }
+
+  .field-drag-handle {
+    width: 34px !important;
+    min-width: 34px !important;
+  }
+
+  .signature-controls,
+  .date-controls,
+  .checkbox-controls,
+  .name-controls,
+  .email-controls {
+    left: 40px !important;
+    max-width: calc(100vw - 52px) !important;
+  }
+}
+
+/* Tablets: preserve readable document width while keeping all
+   editor chrome inside the scrollable document workspace. */
+@media (min-width: 651px) and (max-width: 1100px) {
+  .canvas-area {
+    padding: 24px 12px 36px !important;
+  }
+
+  .pdf-page-wrapper {
+    width: min(100%, 850px) !important;
   }
 }

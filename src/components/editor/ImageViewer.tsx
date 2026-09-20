@@ -387,7 +387,7 @@ export default function ImageViewer({
           background: "#ffffff",
           boxShadow:
             "0 8px 30px rgba(0, 0, 0, 0.12)",
-          overflow: "hidden",
+          overflow: "visible",
           cursor: canAddField
             ? "crosshair"
             : "default",

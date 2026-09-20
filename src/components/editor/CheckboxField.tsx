@@ -597,26 +597,6 @@ export default function CheckboxField({
           <div
             className="field-drag-handle checkbox-drag-handle"
             role="button"
-style={{
-                position: "absolute",
-                top: "-30px",
-                right: "4px",
-                width: "28px",
-                height: "22px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                border: "1px solid #d8d8d3",
-                borderRadius: "6px",
-                background: "#ffffff",
-                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
-                zIndex: 300,
-                touchAction: "none",
-                userSelect: "none",
-                cursor: "grab",
-                lineHeight: 1,
-              }}
             aria-label="Move checkbox field"
             title="Drag to move"
             onPointerDown={(event) => {
