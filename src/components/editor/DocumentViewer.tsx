@@ -76,6 +76,7 @@ interface PdfPageProps {
   fields: DocumentField[];
   selectedFieldId: string | null;
   zoom: number;
+  availableWidth: number;
 
   onAddField: (
     page: number,
@@ -189,6 +190,7 @@ function PdfPage({
   fields,
   selectedFieldId,
   zoom,
+  availableWidth,
   onAddField,
   onUpdateField,
   onDeleteField,
@@ -208,8 +210,6 @@ function PdfPage({
   const [internalHeight, setInternalHeight] =
     useState(DEFAULT_PAGE_HEIGHT);
 
-  const [naturalPageWidth, setNaturalPageWidth] =
-    useState(EDITOR_PAGE_WIDTH);
 
   const safeZoom = clamp(
     zoom,
@@ -217,8 +217,26 @@ function PdfPage({
     MAX_ZOOM,
   );
 
-  const renderedPageWidth =
+  /*
+   * The editor uses an internal 820px coordinate system, but the visible
+   * page must always fit the available viewport on smaller screens.
+   *
+   * At 100% and below, fit the page to the available width.
+   * Above 100%, preserve real zoom and let the outer canvas scroll.
+   */
+  const basePageWidth =
     EDITOR_PAGE_WIDTH * safeZoom;
+
+  const usableWidth =
+    Number.isFinite(availableWidth) &&
+    availableWidth > 0
+      ? availableWidth
+      : EDITOR_PAGE_WIDTH;
+
+  const renderedPageWidth =
+    safeZoom <= 1
+      ? Math.min(basePageWidth, usableWidth)
+      : basePageWidth;
 
   useEffect(() => {
     const element =
@@ -427,52 +445,6 @@ function PdfPage({
     safeZoom,
   ]);
 
-  /**
-   * Determine the rendered PDF width.
-   */
-  useEffect(() => {
-    const element =
-      pageContentRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    const updateNaturalWidth = () => {
-      const canvas =
-        element.querySelector(
-          "canvas",
-        );
-
-      if (
-        !(canvas instanceof
-          HTMLCanvasElement)
-      ) {
-        return;
-      }
-
-      if (
-        canvas.width <= 0
-      ) {
-        return;
-      }
-
-      setNaturalPageWidth(
-        canvas.width,
-      );
-    };
-
-    const frame =
-      requestAnimationFrame(
-        updateNaturalWidth,
-      );
-
-    return () => {
-      cancelAnimationFrame(frame);
-    };
-  }, [
-    renderedPageWidth,
-  ]);
 
   /**
    * Convert displayed coordinates into
@@ -487,14 +459,14 @@ function PdfPage({
       return 1;
     }
 
-    const effectiveInternalWidth =
-      naturalPageWidth > 0
-        ? EDITOR_PAGE_WIDTH
-        : EDITOR_PAGE_WIDTH;
-
+    /*
+     * Fields are always stored in the 820px internal coordinate system.
+     * The actual visible page width, including mobile fitting, determines
+     * the display scale.
+     */
     const scale =
       rect.width /
-      effectiveInternalWidth;
+      EDITOR_PAGE_WIDTH;
 
     return Number.isFinite(scale) &&
       scale > 0
@@ -662,7 +634,9 @@ function PdfPage({
    * document coordinate system.
    */
   const totalDisplayScale =
-    fitScale * safeZoom;
+    fitScale *
+    (renderedPageWidth /
+      EDITOR_PAGE_WIDTH);
 
   const fieldLayerStyle:
     React.CSSProperties = {
@@ -820,8 +794,51 @@ export default function DocumentViewer({
       null,
     );
 
+  const [availableWidth, setAvailableWidth] =
+    useState(EDITOR_PAGE_WIDTH);
+
   const safeZoom =
     normalizeZoom(zoom);
+
+  /*
+   * Measure the actual editor viewport. This is intentionally kept in the
+   * viewer instead of guessing from device breakpoints, so the same logic
+   * works on phones, tablets, laptops, desktops and large monitors.
+   */
+  useEffect(() => {
+    const element = viewerRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const updateAvailableWidth = () => {
+      const width = element.clientWidth;
+
+      if (width <= 0) {
+        return;
+      }
+
+      setAvailableWidth(
+        Math.max(
+          1,
+          width,
+        ),
+      );
+    };
+
+    const observer =
+      new ResizeObserver(
+        updateAvailableWidth,
+      );
+
+    observer.observe(element);
+    updateAvailableWidth();
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   /**
    * Clear stale DOM references when
@@ -1652,6 +1669,9 @@ export default function DocumentViewer({
                 }
                 zoom={
                   safeZoom
+                }
+                availableWidth={
+                  availableWidth
                 }
                 onAddField={
                   onAddField

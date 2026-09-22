@@ -10,19 +10,24 @@ import {
 import {
   ArrowLeft,
   CalendarDays,
+  Clock3,
   CheckSquare,
   ChevronDown,
   Download,
   FileText,
+  FolderOpen,
   Mail,
   MousePointer2,
   PenLine,
+  Pencil,
   Redo2,
   Save,
   Type,
+  Trash2,
   Undo2,
   Upload,
   UserRound,
+  X,
 } from "lucide-react";
 
 import DocumentViewer from "./components/editor/DocumentViewer";
@@ -118,14 +123,140 @@ interface SavedDocumentState {
   savedAt: number;
 }
 
+interface LibraryDocument {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  lastModified: number;
+  fileType: string;
+  fields: DocumentField[];
+  savedAt: number;
+  createdAt: number;
+  blob: Blob;
+}
+
 const SAVE_STORAGE_PREFIX =
   "signflow-document:";
+
+const DOCUMENT_LIBRARY_DB = "signflow-library";
+const DOCUMENT_LIBRARY_STORE = "documents";
+
+const openDocumentLibrary = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(
+      DOCUMENT_LIBRARY_DB,
+      1,
+    );
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains(DOCUMENT_LIBRARY_STORE)) {
+        db.createObjectStore(
+          DOCUMENT_LIBRARY_STORE,
+          { keyPath: "id" },
+        );
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+const getLibraryDocuments = async (): Promise<LibraryDocument[]> => {
+  const db = await openDocumentLibrary();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      DOCUMENT_LIBRARY_STORE,
+      "readonly",
+    );
+    const store = transaction.objectStore(
+      DOCUMENT_LIBRARY_STORE,
+    );
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      db.close();
+      const documents = (request.result as LibraryDocument[]).sort(
+        (a, b) => b.savedAt - a.savedAt,
+      );
+      resolve(documents);
+    };
+
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
+  });
+};
+
+const saveLibraryDocument = async (
+  document: LibraryDocument,
+): Promise<void> => {
+  const db = await openDocumentLibrary();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      DOCUMENT_LIBRARY_STORE,
+      "readwrite",
+    );
+    const store = transaction.objectStore(
+      DOCUMENT_LIBRARY_STORE,
+    );
+
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+
+    store.put(document);
+  });
+};
+
+const deleteLibraryDocument = async (
+  id: string,
+): Promise<void> => {
+  const db = await openDocumentLibrary();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      DOCUMENT_LIBRARY_STORE,
+      "readwrite",
+    );
+    const store = transaction.objectStore(
+      DOCUMENT_LIBRARY_STORE,
+    );
+
+    transaction.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error);
+    };
+
+    store.delete(id);
+  });
+};
+
+const createLibraryId = (file: File): string =>
+  `${file.name}:${file.size}:${file.lastModified}`;
 
 const getStorageKey = (
   selectedFile: File,
 ): string => {
   return `${SAVE_STORAGE_PREFIX}${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}`;
 };
+
+const getTimestamp = (): number => Date.now();
 
 const cloneFields = (
   source: DocumentField[],
@@ -156,6 +287,21 @@ function App() {
 
   const [file, setFile] =
     useState<File | null>(null);
+
+  const [libraryDocuments, setLibraryDocuments] =
+    useState<LibraryDocument[]>([]);
+
+  const [librarySearch, setLibrarySearch] =
+    useState("");
+
+  const [editingDocumentId, setEditingDocumentId] =
+    useState<string | null>(null);
+
+  const [editingDocumentName, setEditingDocumentName] =
+    useState("");
+
+  const [isLibraryLoading, setIsLibraryLoading] =
+    useState(true);
 
   /* =========================================
      TOOL
@@ -281,6 +427,34 @@ function App() {
     fieldsRef.current =
       fields;
   }, [fields]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLibrary = async () => {
+      try {
+        const documents = await getLibraryDocuments();
+        if (mounted) {
+          setLibraryDocuments(documents);
+        }
+      } catch (error) {
+        console.warn(
+          "Unable to load the SignFlow document library.",
+          error,
+        );
+      } finally {
+        if (mounted) {
+          setIsLibraryLoading(false);
+        }
+      }
+    };
+
+    void loadLibrary();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   /* =========================================
      HISTORY CLEANUP
@@ -477,6 +651,195 @@ function App() {
     );
 
   /* =========================================
+     DOCUMENT LIBRARY
+     ========================================= */
+
+  const refreshLibrary = useCallback(async () => {
+    try {
+      const documents = await getLibraryDocuments();
+      setLibraryDocuments(documents);
+    } catch (error) {
+      console.warn(
+        "Unable to refresh the SignFlow document library.",
+        error,
+      );
+    }
+  }, []);
+
+  const persistCurrentDocument = useCallback(
+    async (currentFile: File, currentFields: DocumentField[]) => {
+      const now = getTimestamp();
+      const id = createLibraryId(currentFile);
+      const existing = libraryDocuments.find(
+        (document) => document.id === id,
+      );
+
+      await saveLibraryDocument({
+        id,
+        fileName: currentFile.name,
+        fileSize: currentFile.size,
+        lastModified: currentFile.lastModified,
+        fileType: currentFile.type || "application/octet-stream",
+        fields: cloneFields(currentFields),
+        savedAt: now,
+        createdAt: existing?.createdAt ?? now,
+        blob: currentFile,
+      });
+
+      await refreshLibrary();
+    },
+    [libraryDocuments, refreshLibrary],
+  );
+
+  const handleOpenLibraryDocument = async (
+    document: LibraryDocument,
+  ) => {
+    documentSessionRef.current += 1;
+    clearHistoryTimer();
+    historySnapshotRef.current = null;
+
+    const restoredFile = new File(
+      [document.blob],
+      document.fileName,
+      {
+        type: document.fileType,
+        lastModified: document.lastModified,
+      },
+    );
+
+    const restoredFields = cloneFields(document.fields);
+
+    fieldsRef.current = restoredFields;
+    pastRef.current = [];
+    futureRef.current = [];
+
+    setFile(restoredFile);
+    setFields(restoredFields);
+    setPast([]);
+    setFuture([]);
+    setDocxDocumentElement(null);
+    setSelectedFieldId(null);
+    setTool("select");
+    setZoom(100);
+    setIsSaved(true);
+  };
+
+  const handleDeleteLibraryDocument = async (
+    document: LibraryDocument,
+  ) => {
+    const confirmed = window.confirm(
+      `Delete "${document.fileName}" from your SignFlow library?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteLibraryDocument(document.id);
+      setLibraryDocuments((current) =>
+        current.filter((item) => item.id !== document.id),
+      );
+
+      if (file && createLibraryId(file) === document.id) {
+        documentSessionRef.current += 1;
+        clearHistoryTimer();
+        historySnapshotRef.current = null;
+        fieldsRef.current = [];
+        pastRef.current = [];
+        futureRef.current = [];
+        setFile(null);
+        setFields([]);
+        setPast([]);
+        setFuture([]);
+        setDocxDocumentElement(null);
+        setSelectedFieldId(null);
+        setTool("select");
+        setIsExporting(false);
+        setIsSaved(false);
+        setZoom(100);
+      }
+    } catch (error) {
+      console.error(
+        "Unable to delete library document:",
+        error,
+      );
+      window.alert(
+        "Unable to delete this document from the library.",
+      );
+    }
+  };
+
+  const startRenameDocument = (document: LibraryDocument) => {
+    setEditingDocumentId(document.id);
+    setEditingDocumentName(document.fileName);
+  };
+
+  const cancelRenameDocument = () => {
+    setEditingDocumentId(null);
+    setEditingDocumentName("");
+  };
+
+  const saveRenamedDocument = async (document: LibraryDocument) => {
+    const trimmedName = editingDocumentName.trim();
+
+    if (!trimmedName) {
+      return;
+    }
+
+    const originalExtension =
+      document.fileName.includes(".")
+        ? document.fileName.slice(document.fileName.lastIndexOf("."))
+        : "";
+    const hasExtension = /\.[a-z0-9]+$/i.test(trimmedName);
+    const nextName = hasExtension
+      ? trimmedName
+      : `${trimmedName}${originalExtension}`;
+
+    try {
+      const renamedFile = new File(
+        [document.blob],
+        nextName,
+        {
+          type: document.fileType,
+          lastModified: document.lastModified,
+        },
+      );
+
+      const renamedDocument: LibraryDocument = {
+        ...document,
+        id: createLibraryId(renamedFile),
+        fileName: nextName,
+        blob: renamedFile,
+        savedAt: getTimestamp(),
+      };
+
+      await deleteLibraryDocument(document.id);
+      await saveLibraryDocument(renamedDocument);
+
+      if (file && createLibraryId(file) === document.id) {
+        setFile(renamedFile);
+      }
+
+      cancelRenameDocument();
+      await refreshLibrary();
+    } catch (error) {
+      console.error(
+        "Unable to rename library document:",
+        error,
+      );
+      window.alert("Unable to rename this document.");
+    }
+  };
+
+  const filteredLibraryDocuments =
+    libraryDocuments.filter((document) =>
+      document.fileName
+        .toLowerCase()
+        .includes(librarySearch.trim().toLowerCase()),
+    );
+
+  /* =========================================
      UPLOAD DOCUMENT
      ========================================= */
 
@@ -543,6 +906,23 @@ function App() {
     setFields(
       restoredFields,
     );
+
+    void saveLibraryDocument({
+      id: createLibraryId(selectedFile),
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      lastModified: selectedFile.lastModified,
+      fileType: selectedFile.type || "application/octet-stream",
+      fields: cloneFields(restoredFields),
+      savedAt: getTimestamp(),
+      createdAt: getTimestamp(),
+      blob: selectedFile,
+    }).then(() => refreshLibrary()).catch((error) => {
+      console.warn(
+        "Unable to add the document to the SignFlow library.",
+        error,
+      );
+    });
 
     pastRef.current =
       [];
@@ -1143,7 +1523,7 @@ function App() {
         ),
 
       savedAt:
-        Date.now(),
+        getTimestamp(),
     };
 
     try {
@@ -1157,6 +1537,16 @@ function App() {
       setIsSaved(
         true,
       );
+
+      void persistCurrentDocument(
+        file,
+        fieldsRef.current,
+      ).catch((error) => {
+        console.warn(
+          "Unable to update the SignFlow document library.",
+          error,
+        );
+      });
     } catch (error) {
       console.error(
         "Save error:",
@@ -1302,65 +1692,130 @@ function App() {
 
   if (!file) {
     return (
-      <main className="upload-page">
-        <div className="upload-container">
-          <div className="brand">
-            <div className="brand-mark">
-              S
+      <>
+        <style>{`
+          .signflow-dashboard { min-height: 100vh; background: #f7f8fa; color: #15171a; padding: 28px; box-sizing: border-box; }
+          .signflow-dashboard-inner { width: min(1180px, 100%); margin: 0 auto; }
+          .signflow-dashboard-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 34px; }
+          .signflow-dashboard-brand { display: flex; align-items: center; gap: 11px; font-weight: 800; font-size: 22px; }
+          .signflow-dashboard-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: #15171a; color: #fff; font-weight: 800; }
+          .signflow-dashboard-new { border: 0; border-radius: 11px; background: #15171a; color: #fff; padding: 12px 17px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; }
+          .signflow-dashboard-heading { margin-bottom: 22px; }
+          .signflow-dashboard-heading h1 { margin: 0 0 7px; font-size: clamp(28px, 5vw, 40px); letter-spacing: -1.4px; }
+          .signflow-dashboard-heading p { margin: 0; color: #6c727b; }
+          .signflow-dashboard-toolbar { display: flex; gap: 12px; margin-bottom: 24px; }
+          .signflow-dashboard-search { flex: 1; min-width: 0; border: 1px solid #dfe2e7; background: #fff; border-radius: 11px; padding: 12px 14px; outline: none; font: inherit; box-sizing: border-box; }
+          .signflow-dashboard-search:focus { border-color: #15171a; }
+          .signflow-dashboard-upload { border: 1px solid #dfe2e7; background: #fff; color: #15171a; border-radius: 11px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; white-space: nowrap; }
+          .signflow-dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+          .signflow-document-card { background: #fff; border: 1px solid #e4e6ea; border-radius: 16px; padding: 18px; min-width: 0; transition: transform .18s ease, box-shadow .18s ease; }
+          .signflow-document-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(15, 18, 22, .08); }
+          .signflow-document-card-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 28px; }
+          .signflow-document-icon { width: 44px; height: 44px; border-radius: 12px; background: #f0f2f5; display: grid; place-items: center; }
+          .signflow-document-actions { display: flex; gap: 4px; }
+          .signflow-document-actions button { width: 34px; height: 34px; border: 0; background: transparent; border-radius: 8px; display: grid; place-items: center; cursor: pointer; color: #737983; }
+          .signflow-document-actions button:hover { background: #f1f2f4; color: #15171a; }
+          .signflow-document-actions .danger:hover { color: #c62828; background: #fff1f1; }
+          .signflow-document-name { font-weight: 750; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 7px; }
+          .signflow-document-meta { color: #7a8089; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+          .signflow-document-open { width: 100%; margin-top: 17px; border: 1px solid #e0e3e7; background: #fff; border-radius: 9px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
+          .signflow-document-open:hover { background: #f6f7f8; }
+          .signflow-empty-library { border: 1px dashed #d4d8de; background: #fff; border-radius: 18px; min-height: 320px; display: grid; place-items: center; text-align: center; padding: 30px; box-sizing: border-box; }
+          .signflow-empty-library-icon { width: 64px; height: 64px; border-radius: 18px; background: #f0f2f5; display: grid; place-items: center; margin: 0 auto 16px; }
+          .signflow-empty-library h2 { margin: 0 0 7px; }
+          .signflow-empty-library p { color: #777d86; margin: 0 0 20px; }
+          .signflow-empty-library-button { border: 0; background: #15171a; color: #fff; border-radius: 10px; padding: 11px 17px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; }
+          .signflow-rename { display: flex; gap: 6px; margin-bottom: 7px; }
+          .signflow-rename input { min-width: 0; flex: 1; border: 1px solid #cfd3d8; border-radius: 7px; padding: 7px 8px; outline: none; font: inherit; }
+          .signflow-rename button { border: 0; border-radius: 7px; background: #15171a; color: #fff; padding: 0 9px; cursor: pointer; }
+          @media (max-width: 900px) { .signflow-dashboard { padding: 20px; } .signflow-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+          @media (max-width: 600px) { .signflow-dashboard { padding: 16px; } .signflow-dashboard-header { margin-bottom: 26px; } .signflow-dashboard-new span { display: none; } .signflow-dashboard-grid { grid-template-columns: 1fr; } .signflow-dashboard-toolbar { flex-direction: column; } .signflow-dashboard-upload { min-height: 44px; justify-content: center; } }
+        `}</style>
+
+        <main className="signflow-dashboard">
+          <div className="signflow-dashboard-inner">
+            <header className="signflow-dashboard-header">
+              <div className="signflow-dashboard-brand">
+                <div className="signflow-dashboard-mark">S</div>
+                <span>SignFlow</span>
+              </div>
+
+              <label className="signflow-dashboard-new">
+                <Upload size={17} />
+                <span>New document</span>
+                <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} hidden />
+              </label>
+            </header>
+
+            <section className="signflow-dashboard-heading">
+              <h1>Your documents</h1>
+              <p>Open a previous document or start a new signing workflow.</p>
+            </section>
+
+            <div className="signflow-dashboard-toolbar">
+              <input className="signflow-dashboard-search" type="search" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search documents..." aria-label="Search documents" />
+              <label className="signflow-dashboard-upload">
+                <Upload size={17} />
+                Upload
+                <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} hidden />
+              </label>
             </div>
 
-            <span>
-              SignFlow
-            </span>
+            {isLibraryLoading ? (
+              <div className="signflow-empty-library"><div>Loading your documents...</div></div>
+            ) : filteredLibraryDocuments.length > 0 ? (
+              <div className="signflow-dashboard-grid">
+                {filteredLibraryDocuments.map((document) => {
+                  const extension = document.fileName.split(".").pop()?.toUpperCase() ?? "FILE";
+                  const modified = new Date(document.savedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+                  return (
+                    <article className="signflow-document-card" key={document.id}>
+                      <div className="signflow-document-card-top">
+                        <div className="signflow-document-icon"><FileText size={21} /></div>
+                        <div className="signflow-document-actions">
+                          <button type="button" onClick={() => startRenameDocument(document)} title="Rename document" aria-label={`Rename ${document.fileName}`}><Pencil size={16} /></button>
+                          <button type="button" className="danger" onClick={() => void handleDeleteLibraryDocument(document)} title="Delete document" aria-label={`Delete ${document.fileName}`}><Trash2 size={16} /></button>
+                        </div>
+                      </div>
+
+                      {editingDocumentId === document.id ? (
+                        <div className="signflow-rename">
+                          <input value={editingDocumentName} onChange={(event) => setEditingDocumentName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveRenamedDocument(document); if (event.key === "Escape") cancelRenameDocument(); }} autoFocus aria-label="New document name" />
+                          <button type="button" onClick={() => void saveRenamedDocument(document)} aria-label="Save new name">✓</button>
+                          <button type="button" onClick={cancelRenameDocument} aria-label="Cancel rename"><X size={15} /></button>
+                        </div>
+                      ) : (
+                        <div className="signflow-document-name" title={document.fileName}>{document.fileName}</div>
+                      )}
+
+                      <div className="signflow-document-meta">
+                        <span>{extension}</span><span>•</span><Clock3 size={13} /><span>{modified}</span>
+                      </div>
+
+                      <button type="button" className="signflow-document-open" onClick={() => void handleOpenLibraryDocument(document)}>Open document</button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="signflow-empty-library">
+                <div>
+                  <div className="signflow-empty-library-icon"><FolderOpen size={28} /></div>
+                  <h2>{librarySearch.trim() ? "No matching documents" : "Your document library is empty"}</h2>
+                  <p>{librarySearch.trim() ? "Try another search term." : "Upload your first PDF, DOCX, PNG or JPG document to get started."}</p>
+                  {!librarySearch.trim() && (
+                    <label className="signflow-empty-library-button">
+                      Upload a document
+                      <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} hidden />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-
-          <div className="upload-card">
-            <div className="upload-icon">
-              <Upload
-                size={28}
-              />
-            </div>
-
-            <h1>
-              Sign documents
-              <br />
-              with ease
-            </h1>
-
-            <p>
-              Upload a document,
-              add your signature,
-              text and other
-              fields, then
-              export the
-              completed
-              document.
-            </p>
-
-            <label className="upload-button">
-              <Upload
-                size={18}
-              />
-
-              Upload document
-
-              <input
-                type="file"
-                accept=".pdf,.docx,.png,.jpg,.jpeg"
-                onChange={
-                  handleUpload
-                }
-                hidden
-              />
-            </label>
-
-            <span className="supported">
-              PDF, DOCX, PNG and
-              JPG supported
-            </span>
-          </div>
-        </div>
-      </main>
+        </main>
+      </>
     );
   }
 
