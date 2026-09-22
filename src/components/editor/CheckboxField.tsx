@@ -27,10 +27,7 @@ interface InteractionState {
   initialWidth: number;
   initialHeight: number;
 
-  direction?:
-    | "right"
-    | "bottom"
-    | "corner";
+  direction?: "right" | "bottom" | "corner";
 }
 
 interface ButtonGestureState {
@@ -45,6 +42,87 @@ interface ButtonGestureState {
 }
 
 const DRAG_THRESHOLD = 4;
+
+const MIN_SIZE = 24;
+
+const getInteractionLayer = (
+  element: HTMLElement | null
+): HTMLElement | null => {
+  if (!element) {
+    return null;
+  }
+
+  const fieldElement =
+    element.closest(
+      ".checkbox-field"
+    ) as HTMLElement | null;
+
+  if (fieldElement?.parentElement) {
+    return fieldElement.parentElement;
+  }
+
+  let currentElement:
+    | HTMLElement
+    | null = element.parentElement;
+
+  while (currentElement) {
+    const classNameValue =
+      typeof currentElement.className === "string"
+        ? currentElement.className
+        : "";
+
+    if (
+      classNameValue.includes(
+        "field-layer"
+      ) ||
+      classNameValue.includes(
+        "docx-field-layer"
+      ) ||
+      classNameValue.includes(
+        "image-field-layer"
+      )
+    ) {
+      return currentElement;
+    }
+
+    currentElement =
+      currentElement.parentElement;
+  }
+
+  return null;
+};
+
+const getCoordinateScale = (
+  layer: HTMLElement
+) => {
+  const rect =
+    layer.getBoundingClientRect();
+
+  const scaleX =
+    layer.offsetWidth > 0
+      ? rect.width /
+        layer.offsetWidth
+      : 1;
+
+  const scaleY =
+    layer.offsetHeight > 0
+      ? rect.height /
+        layer.offsetHeight
+      : 1;
+
+  return {
+    x:
+      Number.isFinite(scaleX) &&
+      scaleX > 0
+        ? scaleX
+        : 1,
+    y:
+      Number.isFinite(scaleY) &&
+      scaleY > 0
+        ? scaleY
+        : 1,
+  };
+};
 
 export default function CheckboxField({
   field,
@@ -93,7 +171,7 @@ export default function CheckboxField({
 
   /*
    * --------------------------------------------------
-   * DRAG FROM FIELD
+   * FIELD DRAG
    * --------------------------------------------------
    */
 
@@ -101,16 +179,23 @@ export default function CheckboxField({
     event: React.PointerEvent<HTMLDivElement>
   ) => {
     const target =
-      event.target as HTMLElement;
+      event.target instanceof HTMLElement
+        ? event.target
+        : null;
 
-    /*
-     * These elements have their own pointer
-     * interactions.
-     */
     if (
-      target.closest(".checkbox-controls") ||
-      target.closest(".checkbox-resize-handle") ||
-      target.closest(".checkbox-button")
+      target?.closest(
+        ".checkbox-controls"
+      ) ||
+      target?.closest(
+        ".checkbox-resize-handle"
+      ) ||
+      target?.closest(
+        ".checkbox-button"
+      ) ||
+      target?.closest(
+        ".field-delete"
+      )
     ) {
       return;
     }
@@ -135,22 +220,26 @@ export default function CheckboxField({
     };
 
     const fieldElement =
-      ((event.target as HTMLElement).closest(
+      (target?.closest(
         ".checkbox-field"
       ) as HTMLDivElement | null) ??
       event.currentTarget;
 
-    fieldElement.setPointerCapture(
-      event.pointerId
-    );
+    try {
+      fieldElement.setPointerCapture(
+        event.pointerId
+      );
+    } catch {
+      // Ignore unsupported pointer capture.
+    }
   };
 
   /*
    * --------------------------------------------------
    * DRAG FROM CHECKBOX ITSELF
    *
-   * A short click toggles.
-   * A movement greater than the threshold drags.
+   * Short click toggles.
+   * Movement beyond threshold drags.
    * --------------------------------------------------
    */
 
@@ -174,9 +263,13 @@ export default function CheckboxField({
       moved: false,
     };
 
-    event.currentTarget.setPointerCapture(
-      event.pointerId
-    );
+    try {
+      event.currentTarget.setPointerCapture(
+        event.pointerId
+      );
+    } catch {
+      // Ignore unsupported pointer capture.
+    }
   };
 
   const handleCheckboxPointerMove = (
@@ -197,22 +290,18 @@ export default function CheckboxField({
     }
 
     const deltaX =
-      event.clientX - gesture.startX;
+      event.clientX -
+      gesture.startX;
 
     const deltaY =
-      event.clientY - gesture.startY;
+      event.clientY -
+      gesture.startY;
 
-    const distance =
-      Math.sqrt(
-        deltaX * deltaX +
+    const distance = Math.sqrt(
+      deltaX * deltaX +
         deltaY * deltaY
-      );
+    );
 
-    /*
-     * Don't start dragging until the pointer
-     * has moved enough to distinguish a drag
-     * from a normal checkbox click.
-     */
     if (
       !gesture.moved &&
       distance < DRAG_THRESHOLD
@@ -225,11 +314,16 @@ export default function CheckboxField({
     event.preventDefault();
     event.stopPropagation();
 
+    const checkboxElement =
+      event.currentTarget.closest(
+        ".checkbox-field"
+      ) as HTMLElement | null;
+
     const parent =
-      event.currentTarget
-        .parentElement
-        ?.parentElement
-        ?.offsetParent as HTMLElement | null;
+      getInteractionLayer(
+        checkboxElement ??
+          event.currentTarget
+      );
 
     if (!parent) {
       return;
@@ -238,25 +332,22 @@ export default function CheckboxField({
     const parentRect =
       parent.getBoundingClientRect();
 
-    const scaleX =
-      parent.offsetWidth > 0
-        ? parentRect.width /
-          parent.offsetWidth
-        : 1;
-
-    const scaleY =
-      parent.offsetHeight > 0
-        ? parentRect.height /
-          parent.offsetHeight
-        : 1;
+    const scale =
+      getCoordinateScale(parent);
 
     const coordinateDeltaX =
       deltaX /
-      Math.max(scaleX, 0.0001);
+      Math.max(
+        scale.x,
+        0.0001
+      );
 
     const coordinateDeltaY =
       deltaY /
-      Math.max(scaleY, 0.0001);
+      Math.max(
+        scale.y,
+        0.0001
+      );
 
     const maxX = Math.max(
       0,
@@ -270,21 +361,34 @@ export default function CheckboxField({
         field.height
     );
 
+    const newX =
+      gesture.initialX +
+      coordinateDeltaX;
+
+    const newY =
+      gesture.initialY +
+      coordinateDeltaY;
+
+    /*
+     * parentRect is intentionally read here so
+     * the browser keeps the coordinate relationship
+     * synchronized with the transformed field layer.
+     */
+    void parentRect;
+
     onUpdate(field.id, {
       x: Math.min(
         maxX,
         Math.max(
           0,
-          gesture.initialX +
-            coordinateDeltaX
+          newX
         )
       ),
       y: Math.min(
         maxY,
         Math.max(
           0,
-          gesture.initialY +
-            coordinateDeltaY
+          newY
         )
       ),
     });
@@ -310,27 +414,25 @@ export default function CheckboxField({
     event.preventDefault();
     event.stopPropagation();
 
-    /*
-     * If the pointer did not move, this was
-     * a normal click, so toggle the checkbox.
-     *
-     * If it moved, it was a drag and we do
-     * not toggle.
-     */
     if (!gesture.moved) {
       toggleCheckbox();
     }
 
-    buttonGestureRef.current = null;
+    buttonGestureRef.current =
+      null;
 
-    if (
-      event.currentTarget.hasPointerCapture(
-        event.pointerId
-      )
-    ) {
-      event.currentTarget.releasePointerCapture(
-        event.pointerId
-      );
+    try {
+      if (
+        event.currentTarget.hasPointerCapture(
+          event.pointerId
+        )
+      ) {
+        event.currentTarget.releasePointerCapture(
+          event.pointerId
+        );
+      }
+    } catch {
+      // Ignore unsupported pointer capture.
     }
   };
 
@@ -342,23 +444,28 @@ export default function CheckboxField({
         ?.pointerId ===
       event.pointerId
     ) {
-      buttonGestureRef.current = null;
+      buttonGestureRef.current =
+        null;
     }
 
-    if (
-      event.currentTarget.hasPointerCapture(
-        event.pointerId
-      )
-    ) {
-      event.currentTarget.releasePointerCapture(
-        event.pointerId
-      );
+    try {
+      if (
+        event.currentTarget.hasPointerCapture(
+          event.pointerId
+        )
+      ) {
+        event.currentTarget.releasePointerCapture(
+          event.pointerId
+        );
+      }
+    } catch {
+      // Ignore unsupported pointer capture.
     }
   };
 
   /*
    * --------------------------------------------------
-   * RESIZE
+   * RESIZE START
    * --------------------------------------------------
    */
 
@@ -390,9 +497,13 @@ export default function CheckboxField({
       direction,
     };
 
-    event.currentTarget.setPointerCapture(
-      event.pointerId
-    );
+    try {
+      event.currentTarget.setPointerCapture(
+        event.pointerId
+      );
+    } catch {
+      // Ignore unsupported pointer capture.
+    }
   };
 
   /*
@@ -419,48 +530,56 @@ export default function CheckboxField({
     }
 
     const deltaX =
-      event.clientX - state.startX;
+      event.clientX -
+      state.startX;
 
     const deltaY =
-      event.clientY - state.startY;
+      event.clientY -
+      state.startY;
 
     /*
+     * ------------------------------------------------
      * DRAG
+     * ------------------------------------------------
      */
+
     if (state.type === "drag") {
       event.preventDefault();
       event.stopPropagation();
 
+      const fieldElement =
+        (event.currentTarget.closest(
+          ".checkbox-field"
+        ) as HTMLElement | null) ??
+        event.currentTarget;
+
       const parent =
-        event.currentTarget
-          .offsetParent as HTMLElement | null;
+        getInteractionLayer(
+          fieldElement
+        );
 
       if (!parent) {
         return;
       }
 
-      const parentRect =
-        parent.getBoundingClientRect();
-
-      const scaleX =
-        parent.offsetWidth > 0
-          ? parentRect.width /
-            parent.offsetWidth
-          : 1;
-
-      const scaleY =
-        parent.offsetHeight > 0
-          ? parentRect.height /
-            parent.offsetHeight
-          : 1;
+      const scale =
+        getCoordinateScale(
+          parent
+        );
 
       const coordinateDeltaX =
         deltaX /
-        Math.max(scaleX, 0.0001);
+        Math.max(
+          scale.x,
+          0.0001
+        );
 
       const coordinateDeltaY =
         deltaY /
-        Math.max(scaleY, 0.0001);
+        Math.max(
+          scale.y,
+          0.0001
+        );
 
       const maxX = Math.max(
         0,
@@ -474,13 +593,20 @@ export default function CheckboxField({
           field.height
       );
 
+      const newX =
+        state.initialX +
+        coordinateDeltaX;
+
+      const newY =
+        state.initialY +
+        coordinateDeltaY;
+
       onUpdate(field.id, {
         x: Math.min(
           maxX,
           Math.max(
             0,
-            state.initialX +
-              coordinateDeltaX
+            newX
           )
         ),
 
@@ -488,8 +614,7 @@ export default function CheckboxField({
           maxY,
           Math.max(
             0,
-            state.initialY +
-              coordinateDeltaY
+            newY
           )
         ),
       });
@@ -498,78 +623,110 @@ export default function CheckboxField({
     }
 
     /*
+     * ------------------------------------------------
      * RESIZE
+     * ------------------------------------------------
      */
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const fieldElement =
+      (event.currentTarget.closest(
+        ".checkbox-field"
+      ) as HTMLElement | null) ??
+      event.currentTarget;
+
     const parent =
-      event.currentTarget
-        .offsetParent as HTMLElement | null;
+      getInteractionLayer(
+        fieldElement
+      );
 
     if (!parent) {
       return;
     }
 
-    const parentRect =
-      parent.getBoundingClientRect();
-
-    const scaleX =
-      parent.offsetWidth > 0
-        ? parentRect.width /
-          parent.offsetWidth
-        : 1;
-
-    const scaleY =
-      parent.offsetHeight > 0
-        ? parentRect.height /
-          parent.offsetHeight
-        : 1;
+    const scale =
+      getCoordinateScale(
+        parent
+      );
 
     const coordinateDeltaX =
       deltaX /
-      Math.max(scaleX, 0.0001);
+      Math.max(
+        scale.x,
+        0.0001
+      );
 
     const coordinateDeltaY =
       deltaY /
-      Math.max(scaleY, 0.0001);
+      Math.max(
+        scale.y,
+        0.0001
+      );
 
-    const maxWidth = Math.max(
-      24,
-      parent.offsetWidth - state.initialX
-    );
+    const maxWidth =
+      Math.max(
+        MIN_SIZE,
+        parent.offsetWidth -
+          state.initialX
+      );
 
-    const maxHeight = Math.max(
-      24,
-      parent.offsetHeight - state.initialY
-    );
+    const maxHeight =
+      Math.max(
+        MIN_SIZE,
+        parent.offsetHeight -
+          state.initialY
+      );
 
-    const updates: Partial<DocumentField> =
+    const updates:
+      Partial<DocumentField> =
       {};
 
+    /*
+     * Right edge
+     */
     if (
-      state.direction === "right" ||
-      state.direction === "corner"
+      state.direction ===
+        "right" ||
+      state.direction ===
+        "corner"
     ) {
-      updates.width = Math.min(
-        maxWidth,
-        Math.max(
-          24,
-          state.initialWidth +
-            coordinateDeltaX
-        )
-      );
+      const nextWidth =
+        state.initialWidth +
+        coordinateDeltaX;
+
+      updates.width =
+        Math.min(
+          maxWidth,
+          Math.max(
+            MIN_SIZE,
+            nextWidth
+          )
+        );
     }
 
+    /*
+     * Bottom edge
+     */
     if (
-      state.direction === "bottom" ||
-      state.direction === "corner"
+      state.direction ===
+        "bottom" ||
+      state.direction ===
+        "corner"
     ) {
-      updates.height = Math.min(
-        maxHeight,
-        Math.max(
-          24,
-          state.initialHeight +
-            coordinateDeltaY
-        )
-      );
+      const nextHeight =
+        state.initialHeight +
+        coordinateDeltaY;
+
+      updates.height =
+        Math.min(
+          maxHeight,
+          Math.max(
+            MIN_SIZE,
+            nextHeight
+          )
+        );
     }
 
     onUpdate(
@@ -592,17 +749,22 @@ export default function CheckboxField({
         ?.pointerId ===
       event.pointerId
     ) {
-      interactionRef.current = null;
+      interactionRef.current =
+        null;
     }
 
-    if (
-      event.currentTarget.hasPointerCapture(
-        event.pointerId
-      )
-    ) {
-      event.currentTarget.releasePointerCapture(
-        event.pointerId
-      );
+    try {
+      if (
+        event.currentTarget.hasPointerCapture(
+          event.pointerId
+        )
+      ) {
+        event.currentTarget.releasePointerCapture(
+          event.pointerId
+        );
+      }
+    } catch {
+      // Ignore unsupported pointer capture.
     }
   };
 
@@ -624,7 +786,10 @@ export default function CheckboxField({
         top: field.y,
         width: field.width,
         height: field.height,
+
         touchAction: "none",
+        overflow: "visible",
+        boxSizing: "border-box",
       }}
       onPointerDown={
         handleFieldPointerDown
@@ -647,11 +812,15 @@ export default function CheckboxField({
           <div
             className="field-drag-handle checkbox-drag-handle"
             role="button"
+            tabIndex={0}
             aria-label="Move checkbox field"
             title="Drag to move"
-            onPointerDown={(event) => {
+            onPointerDown={(
+              event
+            ) => {
               event.preventDefault();
               event.stopPropagation();
+
               handleFieldPointerDown(
                 event
               );
@@ -671,29 +840,29 @@ export default function CheckboxField({
 
           <div
             className="checkbox-controls"
-          onPointerDown={(event) =>
-            event.stopPropagation()
-          }
-          onClick={(event) =>
-            event.stopPropagation()
-          }
-        >
-          <span className="checkbox-control-label">
-            Checkbox
-          </span>
-
-          <button
-            type="button"
-            className="field-delete checkbox-delete-button"
-            onPointerDown={
-              handleDelete
+            onPointerDown={(event) =>
+              event.stopPropagation()
             }
-            aria-label="Delete checkbox"
-            title="Delete checkbox"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
-            ×
-          </button>
-        </div>
+            <span className="checkbox-control-label">
+              Checkbox
+            </span>
+
+            <button
+              type="button"
+              className="field-delete checkbox-delete-button"
+              onPointerDown={
+                handleDelete
+              }
+              aria-label="Delete checkbox"
+              title="Delete checkbox"
+            >
+              ×
+            </button>
+          </div>
         </>
       )}
 
@@ -742,12 +911,14 @@ export default function CheckboxField({
         <>
           <div
             className="checkbox-resize-handle checkbox-resize-right"
-            onPointerDown={(event) =>
+            onPointerDown={(
+              event
+            ) => {
               handleResizeStart(
                 event,
                 "right"
-              )
-            }
+              );
+            }}
             onPointerMove={
               handlePointerMove
             }
@@ -761,12 +932,14 @@ export default function CheckboxField({
 
           <div
             className="checkbox-resize-handle checkbox-resize-bottom"
-            onPointerDown={(event) =>
+            onPointerDown={(
+              event
+            ) => {
               handleResizeStart(
                 event,
                 "bottom"
-              )
-            }
+              );
+            }}
             onPointerMove={
               handlePointerMove
             }
@@ -780,12 +953,14 @@ export default function CheckboxField({
 
           <div
             className="checkbox-resize-handle checkbox-resize-corner"
-            onPointerDown={(event) =>
+            onPointerDown={(
+              event
+            ) => {
               handleResizeStart(
                 event,
                 "corner"
-              )
-            }
+              );
+            }}
             onPointerMove={
               handlePointerMove
             }

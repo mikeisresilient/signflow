@@ -1,4 +1,9 @@
-import { useRef, useState } from "react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import type { DocumentField } from "../../types/document";
 
@@ -7,11 +12,16 @@ interface NameFieldProps {
   selected: boolean;
   onUpdate: (
     id: string,
-    updates: Partial<DocumentField>
+    updates: Partial<DocumentField>,
   ) => void;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
 }
+
+type ResizeDirection =
+  | "right"
+  | "bottom"
+  | "corner";
 
 interface InteractionState {
   type: "drag" | "resize";
@@ -26,10 +36,105 @@ interface InteractionState {
   initialWidth: number;
   initialHeight: number;
 
-  direction?:
-    | "right"
-    | "bottom"
-    | "corner";
+  direction?: ResizeDirection;
+}
+
+const MIN_WIDTH = 120;
+const MIN_HEIGHT = 32;
+
+const MAX_WIDTH = 700;
+const MAX_HEIGHT = 300;
+
+/*
+ * Resolve the actual document field
+ * layer rather than relying directly
+ * on the resize handle's offsetParent.
+ *
+ * This is important because a resize
+ * handle is itself absolutely positioned
+ * inside the field.
+ */
+function getInteractionContainer(
+  element: HTMLElement,
+): HTMLElement | null {
+  const fieldElement =
+    element.closest(
+      ".name-field",
+    ) as HTMLElement | null;
+
+  if (fieldElement?.parentElement) {
+    return fieldElement.parentElement;
+  }
+
+  let currentElement: HTMLElement | null =
+    element.parentElement;
+
+  while (currentElement) {
+    const classNameValue =
+      typeof currentElement.className ===
+      "string"
+        ? currentElement.className
+        : "";
+
+    const classNames =
+      classNameValue.split(/\s+/);
+
+    if (
+      classNames.includes(
+        "field-layer",
+      ) ||
+      classNames.includes(
+        "docx-field-layer",
+      ) ||
+      classNames.includes(
+        "image-field-layer",
+      )
+    ) {
+      return currentElement;
+    }
+
+    currentElement =
+      currentElement.parentElement;
+  }
+
+  const offsetParent =
+    element.offsetParent;
+
+  return offsetParent instanceof HTMLElement
+    ? offsetParent
+    : null;
+}
+
+/*
+ * Calculate the visual scale between
+ * the internal document coordinate
+ * system and what is displayed on screen.
+ */
+function getContainerScale(
+  container: HTMLElement,
+): {
+  x: number;
+  y: number;
+} {
+  const rect =
+    container.getBoundingClientRect();
+
+  const scaleX =
+    container.offsetWidth > 0
+      ? rect.width /
+        container.offsetWidth
+      : 1;
+
+  const scaleY =
+    container.offsetHeight > 0
+      ? rect.height /
+        container.offsetHeight
+      : 1;
+
+  return {
+    x: Math.max(scaleX, 0.0001),
+    y: Math.max(scaleY, 0.0001),
+  };
 }
 
 export default function NameField({
@@ -40,32 +145,39 @@ export default function NameField({
   onSelect,
 }: NameFieldProps) {
   const interactionRef =
-    useRef<InteractionState | null>(null);
+    useRef<InteractionState | null>(
+      null,
+    );
 
   const [isEditing, setIsEditing] =
     useState(false);
 
   /*
    * --------------------------------------------------
-   * DRAG
+   * DRAG START
    * --------------------------------------------------
+   *
+   * Only the visible MOVE handle
+   * initiates a field drag.
+   *
+   * This prevents typing inside the
+   * input from accidentally moving the
+   * field on desktop or mobile.
    */
-
   const handleDragStart = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     const target =
       event.target as HTMLElement;
 
-    if (
-      !target.closest(".field-drag-handle") &&
-      (
-        target.closest(".name-controls") ||
-        target.closest(".name-resize-handle") ||
-      target.closest(".name-input") ||
-        target.closest(".field-delete")
-      )
-    ) {
+    const isDragHandle =
+      Boolean(
+        target.closest(
+          ".field-drag-handle",
+        ),
+      );
+
+    if (!isDragHandle) {
       return;
     }
 
@@ -76,41 +188,47 @@ export default function NameField({
 
     interactionRef.current = {
       type: "drag",
-      pointerId: event.pointerId,
-
-      startX: event.clientX,
-      startY: event.clientY,
-
-      initialX: field.x,
-      initialY: field.y,
-
-      initialWidth: field.width,
-      initialHeight: field.height,
+      pointerId:
+        event.pointerId,
+      startX:
+        event.clientX,
+      startY:
+        event.clientY,
+      initialX:
+        field.x,
+      initialY:
+        field.y,
+      initialWidth:
+        Math.max(
+          MIN_WIDTH,
+          field.width,
+        ),
+      initialHeight:
+        Math.max(
+          MIN_HEIGHT,
+          field.height,
+        ),
     };
 
     const fieldElement =
       ((event.target as HTMLElement).closest(
-        ".name-field"
+        ".name-field",
       ) as HTMLDivElement | null) ??
       event.currentTarget;
 
     fieldElement.setPointerCapture(
-      event.pointerId
+      event.pointerId,
     );
   };
 
   /*
    * --------------------------------------------------
-   * RESIZE
+   * RESIZE START
    * --------------------------------------------------
    */
-
   const handleResizeStart = (
-    event: React.PointerEvent<HTMLDivElement>,
-    direction:
-      | "right"
-      | "bottom"
-      | "corner"
+    event: ReactPointerEvent<HTMLDivElement>,
+    direction: ResizeDirection,
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -119,22 +237,31 @@ export default function NameField({
 
     interactionRef.current = {
       type: "resize",
-      pointerId: event.pointerId,
-
-      startX: event.clientX,
-      startY: event.clientY,
-
-      initialX: field.x,
-      initialY: field.y,
-
-      initialWidth: field.width,
-      initialHeight: field.height,
-
+      pointerId:
+        event.pointerId,
+      startX:
+        event.clientX,
+      startY:
+        event.clientY,
+      initialX:
+        field.x,
+      initialY:
+        field.y,
+      initialWidth:
+        Math.max(
+          MIN_WIDTH,
+          field.width,
+        ),
+      initialHeight:
+        Math.max(
+          MIN_HEIGHT,
+          field.height,
+        ),
       direction,
     };
 
     event.currentTarget.setPointerCapture(
-      event.pointerId
+      event.pointerId,
     );
   };
 
@@ -143,9 +270,8 @@ export default function NameField({
    * POINTER MOVE
    * --------------------------------------------------
    */
-
   const handlePointerMove = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     const state =
       interactionRef.current;
@@ -161,119 +287,269 @@ export default function NameField({
       return;
     }
 
-    const deltaX =
-      event.clientX - state.startX;
-
-    const deltaY =
-      event.clientY - state.startY;
-
     /*
+     * ------------------------------------------------
      * DRAG
+     * ------------------------------------------------
      */
-
-    if (state.type === "drag") {
+    if (
+      state.type === "drag"
+    ) {
       event.preventDefault();
       event.stopPropagation();
 
-      const parent =
-        event.currentTarget
-          .offsetParent as HTMLElement | null;
+      const container =
+        getInteractionContainer(
+          event.currentTarget,
+        );
 
-      if (!parent) {
+      if (!container) {
         return;
       }
 
-      const parentRect =
-        parent.getBoundingClientRect();
+      const containerRect =
+        container.getBoundingClientRect();
 
-      const scaleX =
-        parent.offsetWidth > 0
-          ? parentRect.width /
-            parent.offsetWidth
-          : 1;
-
-      const scaleY =
-        parent.offsetHeight > 0
-          ? parentRect.height /
-            parent.offsetHeight
-          : 1;
+      const scale =
+        getContainerScale(
+          container,
+        );
 
       const coordinateDeltaX =
-        deltaX /
-        Math.max(scaleX, 0.0001);
+        (
+          event.clientX -
+          state.startX
+        ) / scale.x;
 
       const coordinateDeltaY =
-        deltaY /
-        Math.max(scaleY, 0.0001);
+        (
+          event.clientY -
+          state.startY
+        ) / scale.y;
 
-      const maxX = Math.max(
-        0,
-        parent.offsetWidth -
-          field.width
-      );
+      const fieldWidth =
+        Math.max(
+          MIN_WIDTH,
+          state.initialWidth,
+        );
 
-      const maxY = Math.max(
-        0,
-        parent.offsetHeight -
-          field.height
-      );
+      const fieldHeight =
+        Math.max(
+          MIN_HEIGHT,
+          state.initialHeight,
+        );
 
-      onUpdate(field.id, {
-        x: Math.min(
+      /*
+       * Keep the field inside the
+       * actual document bounds.
+       */
+      const maxX =
+        Math.max(
+          0,
+          container.offsetWidth -
+            fieldWidth,
+        );
+
+      const maxY =
+        Math.max(
+          0,
+          container.offsetHeight -
+            fieldHeight,
+        );
+
+      /*
+       * containerRect is intentionally
+       * read above so the browser keeps
+       * the coordinate calculation tied
+       * to the displayed document.
+       */
+      void containerRect;
+
+      const nextX =
+        Math.min(
           maxX,
           Math.max(
             0,
             state.initialX +
-              coordinateDeltaX
-          )
-        ),
+              coordinateDeltaX,
+          ),
+        );
 
-        y: Math.min(
+      const nextY =
+        Math.min(
           maxY,
           Math.max(
             0,
             state.initialY +
-              coordinateDeltaY
-          )
-        ),
-      });
+              coordinateDeltaY,
+          ),
+        );
+
+      onUpdate(
+        field.id,
+        {
+          x: nextX,
+          y: nextY,
+        },
+      );
 
       return;
     }
 
     /*
+     * ------------------------------------------------
      * RESIZE
+     * ------------------------------------------------
      */
+    const container =
+      getInteractionContainer(
+        event.currentTarget,
+      );
 
-    const parent =
-      event.currentTarget.offsetParent as HTMLElement | null;
-
-    if (!parent) {
+    if (!container) {
       return;
     }
 
-    const parentRect = parent.getBoundingClientRect();
-    const scaleX = parent.offsetWidth > 0 ? parentRect.width / parent.offsetWidth : 1;
-    const scaleY = parent.offsetHeight > 0 ? parentRect.height / parent.offsetHeight : 1;
+    event.preventDefault();
+    event.stopPropagation();
 
-    const coordinateDeltaX = deltaX / Math.max(scaleX, 0.0001);
-    const coordinateDeltaY = deltaY / Math.max(scaleY, 0.0001);
+    const scale =
+      getContainerScale(
+        container,
+      );
 
-    const updates: Partial<DocumentField> = {};
+    const deltaX =
+      (
+        event.clientX -
+        state.startX
+      ) / scale.x;
 
-    if (state.direction === "right" || state.direction === "corner") {
-      const maxWidth = Math.max(80, parent.offsetWidth - state.initialX);
-      updates.width = Math.min(maxWidth, Math.max(80, state.initialWidth + coordinateDeltaX));
+    const deltaY =
+      (
+        event.clientY -
+        state.startY
+      ) / scale.y;
+
+    const maxWidth =
+      Math.max(
+        MIN_WIDTH,
+        Math.min(
+          MAX_WIDTH,
+          container.offsetWidth -
+            state.initialX,
+        ),
+      );
+
+    const maxHeight =
+      Math.max(
+        MIN_HEIGHT,
+        Math.min(
+          MAX_HEIGHT,
+          container.offsetHeight -
+            state.initialY,
+        ),
+      );
+
+    const startWidth =
+      Math.max(
+        MIN_WIDTH,
+        state.initialWidth,
+      );
+
+    const startHeight =
+      Math.max(
+        MIN_HEIGHT,
+        state.initialHeight,
+      );
+
+    /*
+     * Right resize.
+     */
+    if (
+      state.direction ===
+      "right"
+    ) {
+      const width =
+        Math.min(
+          maxWidth,
+          Math.max(
+            MIN_WIDTH,
+            startWidth +
+              deltaX,
+          ),
+        );
+
+      onUpdate(
+        field.id,
+        {
+          width,
+        },
+      );
+
+      return;
     }
 
-    if (state.direction === "bottom" || state.direction === "corner") {
-      const maxHeight = Math.max(32, parent.offsetHeight - state.initialY);
-      updates.height = Math.min(maxHeight, Math.max(32, state.initialHeight + coordinateDeltaY));
+    /*
+     * Bottom resize.
+     */
+    if (
+      state.direction ===
+      "bottom"
+    ) {
+      const height =
+        Math.min(
+          maxHeight,
+          Math.max(
+            MIN_HEIGHT,
+            startHeight +
+              deltaY,
+          ),
+        );
+
+      onUpdate(
+        field.id,
+        {
+          height,
+        },
+      );
+
+      return;
     }
+
+    /*
+     * Corner resize.
+     *
+     * Name fields do not need to
+     * preserve aspect ratio, so both
+     * dimensions can be adjusted
+     * independently.
+     */
+    const width =
+      Math.min(
+        maxWidth,
+        Math.max(
+          MIN_WIDTH,
+          startWidth +
+            deltaX,
+        ),
+      );
+
+    const height =
+      Math.min(
+        maxHeight,
+        Math.max(
+          MIN_HEIGHT,
+          startHeight +
+            deltaY,
+        ),
+      );
 
     onUpdate(
       field.id,
-      updates
+      {
+        width,
+        height,
+      },
     );
   };
 
@@ -282,27 +558,32 @@ export default function NameField({
    * POINTER END
    * --------------------------------------------------
    */
-
   const handlePointerEnd = (
-    event: React.PointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const state =
+      interactionRef.current;
+
     if (
-      interactionRef.current
-        ?.pointerId ===
-      event.pointerId
+      !state ||
+      state.pointerId !==
+        event.pointerId
     ) {
-      interactionRef.current = null;
+      return;
     }
 
     if (
       event.currentTarget.hasPointerCapture(
-        event.pointerId
+        event.pointerId,
       )
     ) {
       event.currentTarget.releasePointerCapture(
-        event.pointerId
+        event.pointerId,
       );
     }
+
+    interactionRef.current =
+      null;
   };
 
   /*
@@ -310,13 +591,16 @@ export default function NameField({
    * INPUT
    * --------------------------------------------------
    */
-
   const handleInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
-    onUpdate(field.id, {
-      value: event.target.value,
-    });
+    onUpdate(
+      field.id,
+      {
+        value:
+          event.target.value,
+      },
+    );
   };
 
   const handleInputFocus = () => {
@@ -333,9 +617,8 @@ export default function NameField({
    * DELETE
    * --------------------------------------------------
    */
-
   const handleDelete = (
-    event: React.PointerEvent<HTMLButtonElement>
+    event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -348,7 +631,6 @@ export default function NameField({
    * RENDER
    * --------------------------------------------------
    */
-
   return (
     <div
       className={`name-field ${
@@ -359,9 +641,23 @@ export default function NameField({
       style={{
         left: field.x,
         top: field.y,
-        width: field.width,
-        height: field.height,
-        touchAction: "none",
+        width: Math.max(
+          MIN_WIDTH,
+          field.width,
+        ),
+        height: Math.max(
+          MIN_HEIGHT,
+          field.height,
+        ),
+
+        /*
+         * Do not disable touch scrolling
+         * on the entire field.
+         *
+         * Only the move and resize
+         * handles use touchAction: none.
+         */
+        touchAction: "auto",
       }}
       onPointerDown={
         handleDragStart
@@ -375,9 +671,10 @@ export default function NameField({
       onPointerCancel={
         handlePointerEnd
       }
-      onClick={(event) =>
-        event.stopPropagation()
-      }
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect(field.id);
+      }}
     >
       {selected && (
         <div
@@ -392,14 +689,30 @@ export default function NameField({
           <div
             className="field-drag-handle"
             role="button"
-            aria-label="Move field"
+            tabIndex={0}
+            aria-label="Move name field"
             title="Drag to move"
+            style={{
+              touchAction: "none",
+            }}
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+
               handleDragStart(
-                event
+                event,
               );
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key ===
+                  "Enter" ||
+                event.key ===
+                  " "
+              ) {
+                event.preventDefault();
+                onSelect(field.id);
+              }
             }}
           >
             ⋮⋮
@@ -456,10 +769,15 @@ export default function NameField({
         <>
           <div
             className="name-resize-handle name-resize-right"
-            onPointerDown={(event) =>
+            style={{
+              touchAction: "none",
+            }}
+            onPointerDown={(
+              event,
+            ) =>
               handleResizeStart(
                 event,
-                "right"
+                "right",
               )
             }
             onPointerMove={
@@ -475,10 +793,15 @@ export default function NameField({
 
           <div
             className="name-resize-handle name-resize-bottom"
-            onPointerDown={(event) =>
+            style={{
+              touchAction: "none",
+            }}
+            onPointerDown={(
+              event,
+            ) =>
               handleResizeStart(
                 event,
-                "bottom"
+                "bottom",
               )
             }
             onPointerMove={
@@ -494,10 +817,15 @@ export default function NameField({
 
           <div
             className="name-resize-handle name-resize-corner"
-            onPointerDown={(event) =>
+            style={{
+              touchAction: "none",
+            }}
+            onPointerDown={(
+              event,
+            ) =>
               handleResizeStart(
                 event,
-                "corner"
+                "corner",
               )
             }
             onPointerMove={

@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { DocumentField } from "../../types/document";
 
@@ -36,6 +40,53 @@ interface ImageViewerProps {
   ) => void;
 }
 
+const SUPPORTED_TOOLS = new Set([
+  "text",
+  "signature",
+  "date",
+  "checkbox",
+  "name",
+  "email",
+]);
+
+const FIELD_DISPLAY_SIZES: Record<
+  string,
+  {
+    width: number;
+    height: number;
+  }
+> = {
+  text: {
+    width: 200,
+    height: 42,
+  },
+
+  signature: {
+    width: 320,
+    height: 140,
+  },
+
+  date: {
+    width: 180,
+    height: 42,
+  },
+
+  checkbox: {
+    width: 36,
+    height: 36,
+  },
+
+  name: {
+    width: 240,
+    height: 42,
+  },
+
+  email: {
+    width: 280,
+    height: 42,
+  },
+};
+
 export default function ImageViewer({
   file,
   activeTool,
@@ -50,6 +101,9 @@ export default function ImageViewer({
     useRef<HTMLImageElement | null>(null);
 
   const frameRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const viewerRef =
     useRef<HTMLDivElement | null>(null);
 
   const [imageUrl, setImageUrl] =
@@ -68,8 +122,11 @@ export default function ImageViewer({
     useState(0);
 
   /*
-   * Read the uploaded image as a data URL.
+   * --------------------------------------------------
+   * READ IMAGE
+   * --------------------------------------------------
    */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -87,10 +144,16 @@ export default function ImageViewer({
         return;
       }
 
-      setImageUrl(reader.result);
+      setImageUrl(
+        reader.result,
+      );
+
       setImageLoaded(false);
+
       setNaturalWidth(0);
+
       setNaturalHeight(0);
+
       setDisplayWidth(0);
     };
 
@@ -100,56 +163,94 @@ export default function ImageViewer({
       }
 
       setImageUrl("");
+
       setImageLoaded(false);
+
+      setNaturalWidth(0);
+
+      setNaturalHeight(0);
+
+      setDisplayWidth(0);
     };
 
     reader.readAsDataURL(file);
 
     return () => {
       cancelled = true;
-      reader.abort();
+
+      if (
+        reader.readyState ===
+        FileReader.LOADING
+      ) {
+        reader.abort();
+      }
     };
   }, [file]);
 
   /*
-   * Keep the image responsive.
+   * --------------------------------------------------
+   * RESPONSIVE IMAGE SIZE
    *
-   * Field coordinates remain based on
-   * the original image dimensions.
+   * The image fields use the original image
+   * coordinate system.
+   *
+   * Only the visual presentation is scaled.
+   * --------------------------------------------------
    */
+
   useEffect(() => {
     if (!imageLoaded) {
       return;
     }
 
-    const image =
-      imageRef.current;
+    const frame =
+      frameRef.current;
 
-    if (!image) {
+    const viewer =
+      viewerRef.current;
+
+    if (!frame || !viewer) {
       return;
     }
 
-    const parent =
-      frameRef.current?.parentElement;
-
-    if (!parent) {
+    if (
+      !naturalWidth ||
+      !naturalHeight
+    ) {
       return;
     }
 
     const updateDisplaySize = () => {
-      if (
-        !naturalWidth ||
-        !naturalHeight
-      ) {
+      const viewerWidth =
+        viewer.clientWidth;
+
+      if (viewerWidth <= 0) {
         return;
       }
+
+      /*
+       * Keep a small visual breathing room
+       * around the document.
+       *
+       * The value is deliberately responsive
+       * rather than using a minimum width.
+       */
+      const horizontalPadding =
+        viewerWidth <= 480
+          ? 8
+          : 24;
 
       const availableWidth =
         Math.max(
           1,
-          parent.clientWidth - 32,
+          viewerWidth -
+            horizontalPadding * 2,
         );
 
+      /*
+       * Never make the displayed image
+       * wider than the available viewport.
+       */
       const nextWidth =
         Math.min(
           naturalWidth,
@@ -157,7 +258,10 @@ export default function ImageViewer({
         );
 
       setDisplayWidth(
-        nextWidth,
+        Math.max(
+          1,
+          nextWidth,
+        ),
       );
     };
 
@@ -168,7 +272,7 @@ export default function ImageViewer({
         updateDisplaySize,
       );
 
-    observer.observe(parent);
+    observer.observe(viewer);
 
     return () => {
       observer.disconnect();
@@ -179,6 +283,12 @@ export default function ImageViewer({
     naturalHeight,
   ]);
 
+  /*
+   * --------------------------------------------------
+   * IMAGE LOAD
+   * --------------------------------------------------
+   */
+
   const handleImageLoad = () => {
     const image =
       imageRef.current;
@@ -187,23 +297,38 @@ export default function ImageViewer({
       return;
     }
 
-    setNaturalWidth(
-      image.naturalWidth,
-    );
+    const width =
+      image.naturalWidth;
 
-    setNaturalHeight(
-      image.naturalHeight,
-    );
+    const height =
+      image.naturalHeight;
+
+    if (
+      !width ||
+      !height
+    ) {
+      return;
+    }
+
+    setNaturalWidth(width);
+
+    setNaturalHeight(height);
 
     setDisplayWidth(
       image.clientWidth ||
-        image.naturalWidth,
+        width,
     );
 
     setImageLoaded(true);
   };
 
-  const scale =
+  /*
+   * --------------------------------------------------
+   * SCALE
+   * --------------------------------------------------
+   */
+
+  const safeScale =
     naturalWidth > 0 &&
     displayWidth > 0
       ? displayWidth /
@@ -211,15 +336,28 @@ export default function ImageViewer({
       : 1;
 
   const displayHeight =
-    naturalHeight * scale;
+    naturalHeight *
+    safeScale;
+
+  /*
+   * --------------------------------------------------
+   * FIELD MODE
+   * --------------------------------------------------
+   */
 
   const canAddField =
-    activeTool === "text" ||
-    activeTool === "signature" ||
-    activeTool === "date" ||
-    activeTool === "checkbox" ||
-    activeTool === "name" ||
-    activeTool === "email";
+    SUPPORTED_TOOLS.has(
+      activeTool,
+    );
+
+  /*
+   * --------------------------------------------------
+   * ADD FIELD
+   *
+   * Screen coordinates are converted into
+   * original image coordinates.
+   * --------------------------------------------------
+   */
 
   const handlePageClick = (
     event: React.MouseEvent<HTMLDivElement>,
@@ -236,11 +374,44 @@ export default function ImageViewer({
     }
 
     /*
-     * Convert the visible screen coordinate
-     * back into the original image coordinate.
+     * Do not create another field when
+     * clicking an existing field.
      */
+    const target =
+      event.target as HTMLElement;
+
+    if (
+      target.closest(
+        ".document-field",
+      ) ||
+      target.closest(
+        ".signature-field",
+      ) ||
+      target.closest(
+        ".date-field",
+      ) ||
+      target.closest(
+        ".checkbox-field",
+      ) ||
+      target.closest(
+        ".name-field",
+      ) ||
+      target.closest(
+        ".email-field",
+      )
+    ) {
+      return;
+    }
+
     const rect =
       frame.getBoundingClientRect();
+
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0
+    ) {
+      return;
+    }
 
     const displayX =
       event.clientX -
@@ -250,64 +421,153 @@ export default function ImageViewer({
       event.clientY -
       rect.top;
 
-    /* Existing fields and their controls must never create
-       another field underneath the current interaction. */
-    const target =
-      event.target as HTMLElement;
+    const fieldSize =
+      FIELD_DISPLAY_SIZES[
+        activeTool
+      ] ??
+      FIELD_DISPLAY_SIZES.text;
 
-    if (
-      target.closest(
-        ".document-field, .signature-field, .date-field, .checkbox-field, .name-field, .email-field, .field-drag-handle, .field-delete, .field-resize-handle, .signature-resize-handle, .date-resize-handle, .checkbox-resize-handle, .name-resize-handle, .email-resize-handle"
-      )
-    ) {
-      return;
-    }
+    /*
+     * Make sure the entire field
+     * starts inside the image.
+     */
+    const maxDisplayX =
+      Math.max(
+        0,
+        rect.width -
+          fieldSize.width,
+      );
 
-    const displayFieldWidth =
-      activeTool === "signature"
-        ? 320
-        : activeTool === "date"
-          ? 180
-          : activeTool === "checkbox"
-            ? 36
-            : activeTool === "name"
-              ? 240
-              : activeTool === "email"
-                ? 280
-                : 200;
-
-    const displayFieldHeight =
-      activeTool === "signature"
-        ? 140
-        : activeTool === "checkbox"
-          ? 36
-          : 42;
+    const maxDisplayY =
+      Math.max(
+        0,
+        rect.height -
+          fieldSize.height,
+      );
 
     const clampedDisplayX =
       Math.min(
-        Math.max(0, rect.width - displayFieldWidth),
-        Math.max(0, displayX),
+        maxDisplayX,
+        Math.max(
+          0,
+          displayX,
+        ),
       );
 
     const clampedDisplayY =
       Math.min(
-        Math.max(0, rect.height - displayFieldHeight),
-        Math.max(0, displayY),
+        maxDisplayY,
+        Math.max(
+          0,
+          displayY,
+        ),
       );
 
+    /*
+     * Convert displayed coordinates
+     * back into natural image coordinates.
+     */
     const x =
-      clampedDisplayX / scale;
+      clampedDisplayX /
+      safeScale;
 
     const y =
-      clampedDisplayY / scale;
+      clampedDisplayY /
+      safeScale;
 
     onAddField(
       1,
       x,
       y,
-      scale,
+      safeScale,
     );
   };
+
+  /*
+   * --------------------------------------------------
+   * FIELD RENDERING
+   * --------------------------------------------------
+   */
+
+  const renderField = (
+    field: DocumentField,
+  ) => {
+    const commonProps = {
+      field,
+
+      selected:
+        selectedFieldId ===
+        field.id,
+
+      onUpdate:
+        onUpdateField,
+
+      onDelete:
+        onDeleteField,
+
+      onSelect:
+        onSelectField,
+    };
+
+    switch (field.type) {
+      case "text":
+        return (
+          <TextField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      case "signature":
+        return (
+          <SignatureField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      case "date":
+        return (
+          <DateField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      case "checkbox":
+        return (
+          <CheckboxField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      case "name":
+        return (
+          <NameField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      case "email":
+        return (
+          <EmailField
+            key={field.id}
+            {...commonProps}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  /*
+   * --------------------------------------------------
+   * LOADING STATE
+   * --------------------------------------------------
+   */
 
   if (!imageUrl) {
     return (
@@ -315,18 +575,28 @@ export default function ImageViewer({
         className="image-loading"
         style={{
           width: "100%",
-          minHeight: 400,
+          maxWidth: "100%",
+          minHeight: 280,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          boxSizing: "border-box",
+          padding: 24,
           color: "#6f6f6a",
           fontSize: 14,
+          overflow: "hidden",
         }}
       >
         Loading image...
       </div>
     );
   }
+
+  /*
+   * --------------------------------------------------
+   * INITIAL IMAGE LOAD
+   * --------------------------------------------------
+   */
 
   if (
     !imageLoaded ||
@@ -335,12 +605,18 @@ export default function ImageViewer({
   ) {
     return (
       <div
+        ref={viewerRef}
         style={{
           width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
           display: "flex",
           justifyContent: "center",
-          padding: 24,
+          alignItems: "flex-start",
+          padding:
+            "16px 8px",
           boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
         <img
@@ -348,31 +624,49 @@ export default function ImageViewer({
           src={imageUrl}
           alt="Uploaded document"
           onLoad={handleImageLoad}
+          draggable={false}
           style={{
             display: "block",
             width: "auto",
             maxWidth: "100%",
+            minWidth: 0,
             height: "auto",
             maxHeight:
               "calc(100vh - 150px)",
+            objectFit: "contain",
+            userSelect: "none",
+            pointerEvents: "none",
           }}
-          draggable={false}
         />
       </div>
     );
   }
 
+  /*
+   * --------------------------------------------------
+   * RESPONSIVE IMAGE EDITOR
+   * --------------------------------------------------
+   */
+
   return (
     <div
+      ref={viewerRef}
       className="image-document"
       style={{
         width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
         minHeight: "100%",
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        padding: 16,
+        padding:
+          "16px 8px",
         boxSizing: "border-box",
+        overflowX: "hidden",
+        overflowY: "visible",
+        overscrollBehaviorX:
+          "none",
       }}
     >
       <div
@@ -382,33 +676,75 @@ export default function ImageViewer({
             ? "image-page-field-mode"
             : ""
         }
-        onClick={handlePageClick}
+        onClick={
+          handlePageClick
+        }
         style={{
           position: "relative",
-          width: displayWidth,
-          height: displayHeight,
+
+          width:
+            `${displayWidth}px`,
+
+          height:
+            `${displayHeight}px`,
+
           maxWidth: "100%",
-          flexShrink: 0,
+
+          minWidth: 0,
+
+          flex:
+            "0 1 auto",
+
           background: "#ffffff",
+
           boxShadow:
             "0 8px 30px rgba(0, 0, 0, 0.12)",
+
           overflow: "visible",
-          cursor: canAddField
-            ? "crosshair"
-            : "default",
+
+          boxSizing:
+            "border-box",
+
+          cursor:
+            canAddField
+              ? "crosshair"
+              : "default",
+
+          touchAction:
+            canAddField
+              ? "manipulation"
+              : "auto",
         }}
       >
+        {/*
+         * The internal document remains
+         * at its original image dimensions.
+         *
+         * The complete document is then
+         * visually scaled as one unit.
+         */}
         <div
           style={{
             position: "absolute",
+
             top: 0,
+
             left: 0,
-            width: naturalWidth,
-            height: naturalHeight,
+
+            width:
+              `${naturalWidth}px`,
+
+            height:
+              `${naturalHeight}px`,
+
+            minWidth:
+              `${naturalWidth}px`,
+
             transformOrigin:
               "top left",
+
             transform:
-              `scale(${scale})`,
+              `scale(${safeScale})`,
           }}
         >
           <img
@@ -418,20 +754,67 @@ export default function ImageViewer({
             draggable={false}
             style={{
               display: "block",
-              width: naturalWidth,
-              height: naturalHeight,
+
+              width:
+                `${naturalWidth}px`,
+
+              height:
+                `${naturalHeight}px`,
+
               maxWidth: "none",
+
               maxHeight: "none",
+
+              minWidth:
+                `${naturalWidth}px`,
+
               userSelect: "none",
-              pointerEvents: "none",
+
+              WebkitUserSelect:
+                "none",
+
+              pointerEvents:
+                "none",
             }}
           />
 
+          {/*
+           * Field layer.
+           *
+           * It uses the same natural
+           * coordinate system as the image.
+           */}
           <div
+            className="image-field-layer"
             style={{
               position: "absolute",
-              inset: 0,
-              pointerEvents: "none",
+
+              top: 0,
+
+              left: 0,
+
+              width:
+                `${naturalWidth}px`,
+
+              height:
+                `${naturalHeight}px`,
+
+              minWidth:
+                `${naturalWidth}px`,
+
+              minHeight:
+                `${naturalHeight}px`,
+
+              pointerEvents:
+                "none",
+
+              overflow:
+                "visible",
+
+              lineHeight:
+                "normal",
+
+              zIndex: 20,
             }}
           >
             {fields
@@ -439,155 +822,9 @@ export default function ImageViewer({
                 (field) =>
                   field.page === 1,
               )
-              .map((field) => {
-                if (
-                  field.type === "text"
-                ) {
-                  return (
-                    <TextField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                if (
-                  field.type ===
-                  "signature"
-                ) {
-                  return (
-                    <SignatureField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                if (
-                  field.type === "date"
-                ) {
-                  return (
-                    <DateField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                if (
-                  field.type ===
-                  "checkbox"
-                ) {
-                  return (
-                    <CheckboxField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                if (
-                  field.type === "name"
-                ) {
-                  return (
-                    <NameField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                if (
-                  field.type === "email"
-                ) {
-                  return (
-                    <EmailField
-                      key={field.id}
-                      field={field}
-                      selected={
-                        selectedFieldId ===
-                        field.id
-                      }
-                      onUpdate={
-                        onUpdateField
-                      }
-                      onDelete={
-                        onDeleteField
-                      }
-                      onSelect={
-                        onSelectField
-                      }
-                    />
-                  );
-                }
-
-                return null;
-              })}
+              .map(
+                renderField,
+              )}
           </div>
         </div>
       </div>

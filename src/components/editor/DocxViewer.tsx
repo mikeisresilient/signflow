@@ -777,6 +777,16 @@ export default function DocxViewer({
                 "none",
 
               zIndex: 20,
+
+              /*
+               * Important:
+               * Field controls, MOVE handles,
+               * delete buttons and resize handles
+               * are allowed to extend outside
+               * their individual field boxes.
+               */
+              overflow:
+                "visible",
             }}
           >
             {fields

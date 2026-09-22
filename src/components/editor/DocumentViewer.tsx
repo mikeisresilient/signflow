@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Document,
   Page,
@@ -24,6 +28,7 @@ pdfjs.GlobalWorkerOptions.workerSrc =
   ).toString();
 
 const EDITOR_PAGE_WIDTH = 820;
+const DEFAULT_PAGE_HEIGHT = 1120;
 
 interface DocumentViewerProps {
   file: File;
@@ -71,13 +76,46 @@ interface PdfPageProps {
 
 const canPlaceField = (
   activeTool: string,
-) =>
+): boolean =>
   activeTool === "text" ||
   activeTool === "signature" ||
   activeTool === "date" ||
   activeTool === "checkbox" ||
   activeTool === "name" ||
   activeTool === "email";
+
+const INTERACTIVE_FIELD_SELECTOR = [
+  ".document-field",
+  ".signature-field",
+  ".date-field",
+  ".checkbox-field",
+  ".name-field",
+  ".email-field",
+
+  ".field-drag-handle",
+
+  ".field-delete",
+
+  ".field-resize-handle",
+  ".text-resize-handle",
+  ".signature-resize-handle",
+  ".date-resize-handle",
+  ".checkbox-resize-handle",
+  ".name-resize-handle",
+  ".email-resize-handle",
+
+  ".signature-controls",
+  ".date-controls",
+  ".checkbox-controls",
+  ".name-controls",
+  ".email-controls",
+
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "label",
+].join(", ");
 
 function PdfPage({
   pageNumber,
@@ -96,7 +134,7 @@ function PdfPage({
     useState(1);
 
   const [internalHeight, setInternalHeight] =
-    useState(1120);
+    useState(DEFAULT_PAGE_HEIGHT);
 
   useEffect(() => {
     const element = pageRef.current;
@@ -116,24 +154,31 @@ function PdfPage({
         return;
       }
 
-      const nextScale =
+      const rawScale =
         rect.width /
         EDITOR_PAGE_WIDTH;
 
       const safeScale =
-        Number.isFinite(nextScale) &&
-        nextScale > 0
-          ? nextScale
+        Number.isFinite(rawScale) &&
+        rawScale > 0
+          ? Math.min(1, rawScale)
           : 1;
 
+      const measuredHeight =
+        rect.height / safeScale;
+
       setDisplayScale(
-        Math.min(1, safeScale),
+        safeScale,
       );
 
-      setInternalHeight(
-        rect.height /
-          Math.min(1, safeScale),
-      );
+      if (
+        Number.isFinite(measuredHeight) &&
+        measuredHeight > 0
+      ) {
+        setInternalHeight(
+          measuredHeight,
+        );
+      }
     };
 
     const observer =
@@ -162,17 +207,20 @@ function PdfPage({
     }
 
     const target =
-      event.target as HTMLElement;
+      event.target instanceof HTMLElement
+        ? event.target
+        : null;
 
     if (
-      target.closest(
-        ".document-field, .signature-field, .date-field, .checkbox-field, .name-field, .email-field, .field-drag-handle, .field-delete, .field-resize-handle, .signature-resize-handle, .date-resize-handle, .checkbox-resize-handle, .name-resize-handle, .email-resize-handle, button, input, textarea, select, label",
+      target?.closest(
+        INTERACTIVE_FIELD_SELECTOR,
       )
     ) {
       return;
     }
 
-    const page = pageRef.current;
+    const page =
+      pageRef.current;
 
     if (!page) {
       return;
@@ -188,31 +236,52 @@ function PdfPage({
       return;
     }
 
-    const scale =
-      Math.min(
-        1,
-        rect.width /
-          EDITOR_PAGE_WIDTH,
-      );
+    const rawScale =
+      rect.width /
+      EDITOR_PAGE_WIDTH;
 
     const safeScale =
-      Number.isFinite(scale) &&
-      scale > 0
-        ? scale
+      Number.isFinite(rawScale) &&
+      rawScale > 0
+        ? Math.min(1, rawScale)
         : 1;
 
-    const x =
-      (event.clientX - rect.left) /
-      safeScale;
+    const displayX =
+      event.clientX -
+      rect.left;
 
-    const y =
-      (event.clientY - rect.top) /
-      safeScale;
+    const displayY =
+      event.clientY -
+      rect.top;
+
+    const internalX =
+      displayX / safeScale;
+
+    const internalY =
+      displayY / safeScale;
+
+    const safeX =
+      Math.max(
+        0,
+        Math.min(
+          EDITOR_PAGE_WIDTH,
+          internalX,
+        ),
+      );
+
+    const safeY =
+      Math.max(
+        0,
+        Math.min(
+          internalHeight,
+          internalY,
+        ),
+      );
 
     onAddField(
       pageNumber,
-      Math.max(0, x),
-      Math.max(0, y),
+      safeX,
+      safeY,
     );
   };
 
@@ -288,15 +357,25 @@ function PdfPage({
     }
   };
 
-  const fieldLayerStyle = {
+  const fieldLayerStyle: React.CSSProperties = {
+    position: "absolute",
     left: 0,
     top: 0,
     right: "auto",
     bottom: "auto",
+
     width: EDITOR_PAGE_WIDTH,
     height: internalHeight,
+
     transform: `scale(${displayScale})`,
     transformOrigin: "top left",
+
+    overflow: "visible",
+
+    pointerEvents: "none",
+    zIndex: 20,
+
+    boxSizing: "border-box",
   };
 
   return (
@@ -320,7 +399,9 @@ function PdfPage({
         className="field-layer"
         style={fieldLayerStyle}
       >
-        {pageFields.map(renderField)}
+        {pageFields.map(
+          renderField,
+        )}
       </div>
     </div>
   );
@@ -344,10 +425,12 @@ export default function DocumentViewer({
       <Document
         file={file}
         onLoadSuccess={({
-          numPages,
-        }) =>
-          setNumPages(numPages)
-        }
+          numPages: loadedNumPages,
+        }) => {
+          setNumPages(
+            loadedNumPages,
+          );
+        }}
         onLoadError={(error) => {
           console.error(
             "PDF loading error:",
@@ -361,17 +444,25 @@ export default function DocumentViewer({
         }
       >
         {Array.from(
-          { length: numPages },
+          {
+            length: numPages,
+          },
           (_, index) => (
             <PdfPage
               key={index + 1}
-              pageNumber={index + 1}
-              activeTool={activeTool}
+              pageNumber={
+                index + 1
+              }
+              activeTool={
+                activeTool
+              }
               fields={fields}
               selectedFieldId={
                 selectedFieldId
               }
-              onAddField={onAddField}
+              onAddField={
+                onAddField
+              }
               onUpdateField={
                 onUpdateField
               }
