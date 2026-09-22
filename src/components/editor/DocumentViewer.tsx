@@ -5,6 +5,13 @@ import {
   useState,
 } from "react";
 
+import type {
+  ChangeEvent,
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
+
 import {
   Document,
   Page,
@@ -29,6 +36,11 @@ pdfjs.GlobalWorkerOptions.workerSrc =
     import.meta.url,
   ).toString();
 
+/**
+ * SignFlow keeps field coordinates in a stable internal coordinate system.
+ * The actual PDF is then displayed at a responsive scale derived from the
+ * available viewport and the selected zoom.
+ */
 const EDITOR_PAGE_WIDTH = 820;
 const DEFAULT_PAGE_HEIGHT = 1120;
 
@@ -40,14 +52,6 @@ interface DocumentViewerProps {
   activeTool: string;
   fields: DocumentField[];
   selectedFieldId: string | null;
-
-  /**
-   * Zoom percentage.
-   *
-   * 50  = 50%
-   * 100 = 100%
-   * 150 = 150%
-   */
   zoom?: number;
 
   onAddField: (
@@ -107,15 +111,14 @@ interface PdfPageProps {
   ) => void;
 }
 
-const canPlaceField = (
-  activeTool: string,
-): boolean =>
-  activeTool === "text" ||
-  activeTool === "signature" ||
-  activeTool === "date" ||
-  activeTool === "checkbox" ||
-  activeTool === "name" ||
-  activeTool === "email";
+const FIELD_TOOLS = new Set([
+  "text",
+  "signature",
+  "date",
+  "checkbox",
+  "name",
+  "email",
+]);
 
 const INTERACTIVE_FIELD_SELECTOR = [
   ".document-field",
@@ -124,11 +127,8 @@ const INTERACTIVE_FIELD_SELECTOR = [
   ".checkbox-field",
   ".name-field",
   ".email-field",
-
   ".field-drag-handle",
-
   ".field-delete",
-
   ".field-resize-handle",
   ".text-resize-handle",
   ".signature-resize-handle",
@@ -136,13 +136,11 @@ const INTERACTIVE_FIELD_SELECTOR = [
   ".checkbox-resize-handle",
   ".name-resize-handle",
   ".email-resize-handle",
-
   ".signature-controls",
   ".date-controls",
   ".checkbox-controls",
   ".name-controls",
   ".email-controls",
-
   "button",
   "input",
   "textarea",
@@ -184,6 +182,32 @@ const normalizeZoom = (
   );
 };
 
+const isFieldTool = (
+  tool: string,
+): boolean => FIELD_TOOLS.has(tool);
+
+const isInteractiveTarget = (
+  target: EventTarget | null,
+): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      INTERACTIVE_FIELD_SELECTOR,
+    ),
+  );
+};
+
+/**
+ * Each PDF page owns its own geometry.
+ *
+ * Important:
+ * The page itself is never forced to 100% by a generic .pdf-page-wrapper
+ * rule. A unique class is used here so the editor can control its width
+ * without fighting the global responsive stylesheet.
+ */
 function PdfPage({
   pageNumber,
   activeTool,
@@ -204,12 +228,8 @@ function PdfPage({
   const pageContentRef =
     useRef<HTMLDivElement | null>(null);
 
-  const [fitScale, setFitScale] =
-    useState(1);
-
-  const [internalHeight, setInternalHeight] =
+  const [pageInternalHeight, setPageInternalHeight] =
     useState(DEFAULT_PAGE_HEIGHT);
-
 
   const safeZoom = clamp(
     zoom,
@@ -217,26 +237,48 @@ function PdfPage({
     MAX_ZOOM,
   );
 
-  /*
-   * The editor uses an internal 820px coordinate system, but the visible
-   * page must always fit the available viewport on smaller screens.
-   *
-   * At 100% and below, fit the page to the available width.
-   * Above 100%, preserve real zoom and let the outer canvas scroll.
-   */
-  const basePageWidth =
-    EDITOR_PAGE_WIDTH * safeZoom;
-
-  const usableWidth =
+  const safeAvailableWidth =
     Number.isFinite(availableWidth) &&
     availableWidth > 0
       ? availableWidth
       : EDITOR_PAGE_WIDTH;
 
-  const renderedPageWidth =
+  /**
+   * At 100% and below:
+   *   the document fits the available viewport.
+   *
+   * Above 100%:
+   *   the document keeps its zoomed width and the inner scroll area
+   *   handles horizontal scrolling.
+   */
+  const requestedWidth =
+    EDITOR_PAGE_WIDTH * safeZoom;
+
+  const displayWidth =
     safeZoom <= 1
-      ? Math.min(basePageWidth, usableWidth)
-      : basePageWidth;
+      ? Math.min(
+          requestedWidth,
+          safeAvailableWidth,
+        )
+      : requestedWidth;
+
+  const safeDisplayWidth =
+    Math.max(
+      1,
+      displayWidth,
+    );
+
+  /**
+   * One and only one scale is used for field coordinates:
+   *
+   *     displayed page width / internal page width
+   *
+   * This makes field placement, dragging and resizing independent of
+   * whether the device is a phone, tablet, laptop or desktop.
+   */
+  const displayScale =
+    safeDisplayWidth /
+    EDITOR_PAGE_WIDTH;
 
   useEffect(() => {
     const element =
@@ -263,20 +305,20 @@ function PdfPage({
   ]);
 
   /**
-   * Detect the page that is currently
-   * visible while the document scrolls.
+   * Current-page detection.
+   *
+   * The root application scroll container is intentionally not hard-coded.
+   * IntersectionObserver calculates visibility against the nearest viewport
+   * so this works with the desktop and mobile layouts.
    */
   useEffect(() => {
     const element =
       pageRef.current;
 
-    if (!element) {
-      return;
-    }
-
     if (
+      !element ||
       typeof IntersectionObserver ===
-      "undefined"
+        "undefined"
     ) {
       return;
     }
@@ -284,48 +326,57 @@ function PdfPage({
     const observer =
       new IntersectionObserver(
         (entries) => {
-          const visibleEntries =
+          const visible =
             entries.filter(
               (entry) =>
                 entry.isIntersecting &&
                 entry.intersectionRatio >=
-                  0.25,
+                  0.2,
             );
 
           if (
-            visibleEntries.length === 0
+            visible.length === 0
           ) {
             return;
           }
 
-          const mostVisible =
-            visibleEntries.reduce(
-              (
-                previous,
-                current,
-              ) =>
-                current.intersectionRatio >
-                previous.intersectionRatio
-                  ? current
-                  : previous,
+          let mostVisible =
+            visible[0];
+
+          for (
+            let index = 1;
+            index < visible.length;
+            index += 1
+          ) {
+            if (
+              visible[index]
+                .intersectionRatio >
+              mostVisible.intersectionRatio
+            ) {
+              mostVisible =
+                visible[index];
+            }
+          }
+
+          if (mostVisible) {
+            onPageVisible(
+              pageNumber,
             );
-
-          onPageVisible(
-            pageNumber,
-          );
-
-          void mostVisible;
+          }
         },
         {
           threshold: [
-            0.25,
+            0.2,
+            0.35,
             0.5,
             0.75,
           ],
         },
       );
 
-    observer.observe(element);
+    observer.observe(
+      element,
+    );
 
     return () => {
       observer.disconnect();
@@ -336,22 +387,37 @@ function PdfPage({
   ]);
 
   /**
-   * Measure the actual visible page.
+   * Read the actual PDF canvas height.
    *
-   * The PDF and field layer use the same
-   * coordinate system even when zoomed.
+   * React-PDF renders the canvas at the requested display width. Converting
+   * that rendered height back through displayScale gives us the real internal
+   * page height. This is especially important for the final page and for PDFs
+   * with non-standard page dimensions.
    */
   useEffect(() => {
     const element =
-      pageRef.current;
+      pageContentRef.current;
 
     if (!element) {
       return;
     }
 
-    const updateGeometry = () => {
+    let frame = 0;
+
+    const measurePage = () => {
+      const canvas =
+        element.querySelector(
+          "canvas",
+        );
+
+      if (
+        !(canvas instanceof HTMLCanvasElement)
+      ) {
+        return;
+      }
+
       const rect =
-        element.getBoundingClientRect();
+        canvas.getBoundingClientRect();
 
       if (
         rect.width <= 0 ||
@@ -360,139 +426,63 @@ function PdfPage({
         return;
       }
 
-      const rawScale =
-        rect.width /
-        renderedPageWidth;
-
-      const safeScale =
-        Number.isFinite(rawScale) &&
-        rawScale > 0
-          ? rawScale
-          : 1;
-
-      setFitScale(
-        safeScale,
-      );
-
-      const content =
-        pageContentRef.current;
-
-      if (!content) {
-        return;
-      }
-
-      const contentRect =
-        content.getBoundingClientRect();
-
-      if (
-        contentRect.height <= 0
-      ) {
-        return;
-      }
-
-      const totalVisualScale =
-        safeScale * safeZoom;
-
-      if (
-        !Number.isFinite(
-          totalVisualScale,
-        ) ||
-        totalVisualScale <= 0
-      ) {
-        return;
-      }
-
-      const measuredInternalHeight =
-        contentRect.height /
-        totalVisualScale;
+      const measuredHeight =
+        rect.height /
+        displayScale;
 
       if (
         Number.isFinite(
-          measuredInternalHeight,
+          measuredHeight,
         ) &&
-        measuredInternalHeight > 0
+        measuredHeight > 0
       ) {
-        setInternalHeight(
-          measuredInternalHeight,
+        setPageInternalHeight(
+          measuredHeight,
         );
       }
     };
 
     const observer =
       new ResizeObserver(
-        updateGeometry,
+        () => {
+          measurePage();
+        },
       );
 
-    observer.observe(element);
+    observer.observe(
+      element,
+    );
 
-    if (pageContentRef.current) {
-      observer.observe(
-        pageContentRef.current,
-      );
-    }
-
-    const frame =
+    frame =
       requestAnimationFrame(
-        updateGeometry,
+        measurePage,
       );
 
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(
+        frame,
+      );
       observer.disconnect();
     };
   }, [
-    renderedPageWidth,
-    safeZoom,
+    displayScale,
+    safeDisplayWidth,
   ]);
 
-
-  /**
-   * Convert displayed coordinates into
-   * the internal 820px coordinate system.
-   */
-  const getDisplayToInternalScale = (
-    rect: DOMRect,
-  ): number => {
-    if (
-      rect.width <= 0
-    ) {
-      return 1;
-    }
-
-    /*
-     * Fields are always stored in the 820px internal coordinate system.
-     * The actual visible page width, including mobile fitting, determines
-     * the display scale.
-     */
-    const scale =
-      rect.width /
-      EDITOR_PAGE_WIDTH;
-
-    return Number.isFinite(scale) &&
-      scale > 0
-      ? scale
-      : 1;
-  };
-
   const handlePageClick = (
-    event: React.MouseEvent<HTMLDivElement>,
+    event: ReactMouseEvent<HTMLDivElement>,
   ) => {
     if (
-      !canPlaceField(
+      !isFieldTool(
         activeTool,
       )
     ) {
       return;
     }
 
-    const target =
-      event.target instanceof HTMLElement
-        ? event.target
-        : null;
-
     if (
-      target?.closest(
-        INTERACTIVE_FIELD_SELECTOR,
+      isInteractiveTarget(
+        event.target,
       )
     ) {
       return;
@@ -515,10 +505,20 @@ function PdfPage({
       return;
     }
 
+    /**
+     * The page's visible width is the source of truth.
+     * Never use viewport width or zoom directly here.
+     */
     const scale =
-      getDisplayToInternalScale(
-        rect,
-      );
+      rect.width /
+      EDITOR_PAGE_WIDTH;
+
+    if (
+      !Number.isFinite(scale) ||
+      scale <= 0
+    ) {
+      return;
+    }
 
     const displayX =
       event.clientX -
@@ -529,12 +529,10 @@ function PdfPage({
       rect.top;
 
     const internalX =
-      displayX /
-      scale;
+      displayX / scale;
 
     const internalY =
-      displayY /
-      scale;
+      displayY / scale;
 
     const safeX =
       clamp(
@@ -547,7 +545,7 @@ function PdfPage({
       clamp(
         internalY,
         0,
-        internalHeight,
+        pageInternalHeight,
       );
 
     onAddField(
@@ -629,119 +627,83 @@ function PdfPage({
     }
   };
 
-  /**
-   * Keep the field layer in the original
-   * document coordinate system.
-   */
-  const totalDisplayScale =
-    fitScale *
-    (renderedPageWidth /
-      EDITOR_PAGE_WIDTH);
+  const fieldLayerStyle: CSSProperties = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: EDITOR_PAGE_WIDTH,
+    height: pageInternalHeight,
+    transform:
+      `scale(${displayScale})`,
+    transformOrigin:
+      "top left",
+    overflow: "visible",
+    pointerEvents: "none",
+    zIndex: 20,
+    boxSizing: "border-box",
+  };
 
-  const fieldLayerStyle:
-    React.CSSProperties = {
-      position: "absolute",
-
-      left: 0,
-      top: 0,
-
-      width:
-        EDITOR_PAGE_WIDTH,
-
-      height:
-        internalHeight,
-
-      transform:
-        `scale(${totalDisplayScale})`,
-
-      transformOrigin:
-        "top left",
-
-      overflow:
-        "visible",
-
-      pointerEvents:
-        "none",
-
-      zIndex: 20,
-
-      boxSizing:
-        "border-box",
-    };
-
-  const pageContentStyle:
-    React.CSSProperties = {
-      position:
-        "relative",
-
-      width:
-        renderedPageWidth,
-
-      maxWidth:
-        "none",
-
-      flex:
-        "0 0 auto",
-
-      boxSizing:
-        "border-box",
-    };
+  const pageStyle: CSSProperties = {
+    position: "relative",
+    width: safeDisplayWidth,
+    minWidth: safeDisplayWidth,
+    maxWidth: "none",
+    height: "auto",
+    flex: "0 0 auto",
+    boxSizing: "border-box",
+    marginLeft:
+      safeZoom <= 1
+        ? "auto"
+        : 0,
+    marginRight:
+      safeZoom <= 1
+        ? "auto"
+        : 0,
+    scrollMarginTop: 76,
+  };
 
   return (
     <div
       ref={pageRef}
-      className={`pdf-page-wrapper ${
-        canPlaceField(activeTool)
-          ? "pdf-page-text-mode"
+      className={`signflow-pdf-page ${
+        isFieldTool(activeTool)
+          ? "signflow-pdf-page-text-mode"
           : ""
       }`}
-      onClick={
-        handlePageClick
-      }
       data-page-number={
         pageNumber
       }
-      style={{
-        width:
-          renderedPageWidth,
-
-        maxWidth:
-          "none",
-
-        flex:
-          "0 0 auto",
-
-        position:
-          "relative",
-
-        boxSizing:
-          "border-box",
-
-        scrollMarginTop:
-          "70px",
-      }}
+      onClick={
+        handlePageClick
+      }
+      style={pageStyle}
     >
       <div
         ref={
           pageContentRef
         }
-        style={
-          pageContentStyle
-        }
+        className="signflow-pdf-page-content"
+        style={{
+          position: "relative",
+          width: safeDisplayWidth,
+          minWidth: safeDisplayWidth,
+          maxWidth: "none",
+          boxSizing: "border-box",
+        }}
       >
         <Page
           pageNumber={
             pageNumber
           }
           width={
-            renderedPageWidth
+            safeDisplayWidth
           }
           renderTextLayer
           renderAnnotationLayer
         />
 
         <div
-          className="field-layer"
+          className="signflow-pdf-field-layer"
           style={
             fieldLayerStyle
           }
@@ -766,20 +728,29 @@ export default function DocumentViewer({
   onDeleteField,
   onSelectField,
 }: DocumentViewerProps) {
-  const [
-    numPages,
-    setNumPages,
-  ] = useState(0);
+  const [numPages, setNumPages] =
+    useState(0);
 
-  const [
-    currentPage,
-    setCurrentPage,
-  ] = useState(1);
+  const [currentPage, setCurrentPage] =
+    useState(1);
 
-  const [
-    pageInput,
-    setPageInput,
-  ] = useState("1");
+  const [pageInput, setPageInput] =
+    useState("1");
+
+  const [availableWidth, setAvailableWidth] =
+    useState(
+      EDITOR_PAGE_WIDTH,
+    );
+
+  const viewerRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
+
+  const scrollRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
 
   const pageRefs =
     useRef<
@@ -787,66 +758,59 @@ export default function DocumentViewer({
         number,
         HTMLDivElement
       >
-    >(new Map());
-
-  const viewerRef =
-    useRef<HTMLDivElement | null>(
-      null,
+    >(
+      new Map(),
     );
-
-  const [availableWidth, setAvailableWidth] =
-    useState(EDITOR_PAGE_WIDTH);
 
   const safeZoom =
     normalizeZoom(zoom);
 
-  /*
-   * Measure the actual editor viewport. This is intentionally kept in the
-   * viewer instead of guessing from device breakpoints, so the same logic
-   * works on phones, tablets, laptops, desktops and large monitors.
+  /**
+   * Measure the actual width available to the PDF editor.
+   *
+   * ResizeObserver handles:
+   *   phone rotation
+   *   tablet rotation
+   *   sidebar changes
+   *   browser resizing
+   *   desktop window resizing
    */
   useEffect(() => {
-    const element = viewerRef.current;
+    const element =
+      viewerRef.current;
 
     if (!element) {
       return;
     }
 
-    const updateAvailableWidth = () => {
-      const width = element.clientWidth;
+    const updateWidth = () => {
+      const width =
+        element.clientWidth;
 
-      if (width <= 0) {
-        return;
-      }
-
-      setAvailableWidth(
-        Math.max(
-          1,
+      if (
+        width > 0
+      ) {
+        setAvailableWidth(
           width,
-        ),
-      );
+        );
+      }
     };
 
     const observer =
       new ResizeObserver(
-        updateAvailableWidth,
+        updateWidth,
       );
 
-    observer.observe(element);
-    updateAvailableWidth();
+    observer.observe(
+      element,
+    );
+
+    updateWidth();
 
     return () => {
       observer.disconnect();
     };
   }, []);
-
-  /**
-   * Clear stale DOM references when
-   * the uploaded document changes.
-   */
-  useEffect(() => {
-    pageRefs.current.clear();
-  }, [file]);
 
   const registerPageRef =
     useCallback(
@@ -869,23 +833,16 @@ export default function DocumentViewer({
       [],
     );
 
-  /**
-   * Update both navigation values together.
-   */
   const handlePageVisible =
     useCallback(
-      (pageNumber: number) => {
+      (
+        pageNumber: number,
+      ) => {
         setCurrentPage(
-          (previousPage) => {
-            if (
-              previousPage ===
-              pageNumber
-            ) {
-              return previousPage;
-            }
-
-            return pageNumber;
-          },
+          (previous) =>
+            previous === pageNumber
+              ? previous
+              : pageNumber,
         );
 
         setPageInput(
@@ -895,6 +852,12 @@ export default function DocumentViewer({
       [],
     );
 
+  /**
+   * Scroll only the SignFlow document container.
+   *
+   * This avoids scrollIntoView() choosing an unrelated ancestor on mobile
+   * browsers and accidentally moving the application shell.
+   */
   const goToPage =
     useCallback(
       (pageNumber: number) => {
@@ -926,19 +889,44 @@ export default function DocumentViewer({
           String(safePage),
         );
 
-        if (!pageElement) {
+        if (
+          !pageElement
+        ) {
           return;
         }
 
-        pageElement.scrollIntoView({
-          behavior:
-            "smooth",
+        const container =
+          scrollRef.current;
 
-          block:
-            "start",
+        if (!container) {
+          pageElement.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
 
-          inline:
-            "nearest",
+          return;
+        }
+
+        const containerRect =
+          container.getBoundingClientRect();
+
+        const pageRect =
+          pageElement.getBoundingClientRect();
+
+        const targetTop =
+          container.scrollTop +
+          (
+            pageRect.top -
+            containerRect.top
+          ) -
+          8;
+
+        container.scrollTo({
+          top: Math.max(
+            0,
+            targetTop,
+          ),
+          behavior: "smooth",
         });
       },
       [
@@ -947,199 +935,182 @@ export default function DocumentViewer({
     );
 
   const handlePreviousPage =
-    useCallback(() => {
-      if (
-        currentPage <= 1
-      ) {
-        return;
-      }
+    useCallback(
+      () => {
+        if (
+          currentPage <= 1
+        ) {
+          return;
+        }
 
-      goToPage(
-        currentPage - 1,
-      );
-    }, [
-      currentPage,
-      goToPage,
-    ]);
+        goToPage(
+          currentPage - 1,
+        );
+      },
+      [
+        currentPage,
+        goToPage,
+      ],
+    );
 
   const handleNextPage =
-    useCallback(() => {
-      if (
-        currentPage >=
-        numPages
-      ) {
-        return;
-      }
+    useCallback(
+      () => {
+        if (
+          currentPage >=
+          numPages
+        ) {
+          return;
+        }
 
-      goToPage(
-        currentPage + 1,
-      );
-    }, [
-      currentPage,
-      numPages,
-      goToPage,
-    ]);
+        goToPage(
+          currentPage + 1,
+        );
+      },
+      [
+        currentPage,
+        numPages,
+        goToPage,
+      ],
+    );
 
   /**
    * Keyboard page navigation.
-   *
-   * Navigation is ignored while the user
-   * is interacting with an editor field,
-   * form control, button, resize handle,
-   * or page number input.
    */
   useEffect(() => {
-    const handleKeyboardNavigation = (
-      event: KeyboardEvent,
-    ) => {
-      if (numPages <= 0) {
-        return;
-      }
-
-      const activeElement =
-        document.activeElement;
-
-      const target =
-        event.target instanceof HTMLElement
-          ? event.target
-          : null;
-
-      const activeIsInsideViewer =
-        viewerRef.current
-          ? viewerRef.current.contains(
-              activeElement,
-            )
-          : false;
-
-      const activeTag =
-        activeElement instanceof HTMLElement
-          ? activeElement.tagName
-          : "";
-
-      const targetTag =
-        target?.tagName ?? "";
-
-      const isEditableElement =
-        activeTag === "INPUT" ||
-        activeTag === "TEXTAREA" ||
-        activeTag === "SELECT" ||
-        activeElement?.getAttribute(
-          "contenteditable",
-        ) === "true" ||
-        targetTag === "INPUT" ||
-        targetTag === "TEXTAREA" ||
-        targetTag === "SELECT" ||
-        target?.getAttribute(
-          "contenteditable",
-        ) === "true";
-
-      if (isEditableElement) {
-        return;
-      }
-
-      if (
-        target?.closest(
-          INTERACTIVE_FIELD_SELECTOR,
-        )
-      ) {
-        return;
-      }
-
-      if (
-        activeElement &&
-        activeElement !== document.body &&
-        !activeIsInsideViewer
-      ) {
-        return;
-      }
-
-      switch (event.key) {
-        case "ArrowRight":
-        case "ArrowDown":
-        case "PageDown": {
-          if (
-            currentPage >=
-            numPages
-          ) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          goToPage(
-            currentPage + 1,
-          );
-
+    const handleKeyboard =
+      (
+        event: globalThis.KeyboardEvent,
+      ) => {
+        if (
+          numPages <= 0
+        ) {
           return;
         }
 
-        case "ArrowLeft":
-        case "ArrowUp":
-        case "PageUp": {
-          if (
-            currentPage <= 1
-          ) {
-            return;
-          }
+        const active =
+          document.activeElement;
 
-          event.preventDefault();
-          event.stopPropagation();
+        const target =
+          event.target instanceof
+          HTMLElement
+            ? event.target
+            : null;
 
-          goToPage(
-            currentPage - 1,
-          );
+        const activeInside =
+          viewerRef.current
+            ? viewerRef.current.contains(
+                active,
+              )
+            : false;
 
+        const activeTag =
+          active instanceof HTMLElement
+            ? active.tagName
+            : "";
+
+        const targetTag =
+          target?.tagName ?? "";
+
+        const editable =
+          activeTag === "INPUT" ||
+          activeTag === "TEXTAREA" ||
+          activeTag === "SELECT" ||
+          targetTag === "INPUT" ||
+          targetTag === "TEXTAREA" ||
+          targetTag === "SELECT" ||
+          active?.getAttribute(
+            "contenteditable",
+          ) === "true" ||
+          target?.getAttribute(
+            "contenteditable",
+          ) === "true";
+
+        if (editable) {
           return;
         }
 
-        case "Home": {
-          if (
-            currentPage === 1
-          ) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          goToPage(1);
-
+        if (
+          isInteractiveTarget(
+            target,
+          )
+        ) {
           return;
         }
 
-        case "End": {
-          if (
-            currentPage ===
-            numPages
-          ) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          goToPage(
-            numPages,
-          );
-
+        if (
+          active &&
+          active !== document.body &&
+          !activeInside
+        ) {
           return;
         }
 
-        default:
-          return;
-      }
-    };
+        switch (
+          event.key
+        ) {
+          case "ArrowRight":
+          case "ArrowDown":
+          case "PageDown":
+            if (
+              currentPage <
+              numPages
+            ) {
+              event.preventDefault();
+              goToPage(
+                currentPage + 1,
+              );
+            }
+            return;
+
+          case "ArrowLeft":
+          case "ArrowUp":
+          case "PageUp":
+            if (
+              currentPage > 1
+            ) {
+              event.preventDefault();
+              goToPage(
+                currentPage - 1,
+              );
+            }
+            return;
+
+          case "Home":
+            if (
+              currentPage !== 1
+            ) {
+              event.preventDefault();
+              goToPage(1);
+            }
+            return;
+
+          case "End":
+            if (
+              currentPage !==
+              numPages
+            ) {
+              event.preventDefault();
+              goToPage(
+                numPages,
+              );
+            }
+            return;
+
+          default:
+            return;
+        }
+      };
 
     window.addEventListener(
       "keydown",
-      handleKeyboardNavigation,
+      handleKeyboard,
     );
 
     return () => {
       window.removeEventListener(
         "keydown",
-        handleKeyboardNavigation,
+        handleKeyboard,
       );
     };
   }, [
@@ -1150,8 +1121,7 @@ export default function DocumentViewer({
 
   const handlePageInputChange =
     (
-      event:
-        React.ChangeEvent<HTMLInputElement>,
+      event: ChangeEvent<HTMLInputElement>,
     ) => {
       const value =
         event.target.value;
@@ -1174,14 +1144,14 @@ export default function DocumentViewer({
         return;
       }
 
-      const parsedPage =
+      const parsed =
         Number(
           pageInput,
         );
 
       if (
         !Number.isFinite(
-          parsedPage,
+          parsed,
         )
       ) {
         setPageInput(
@@ -1189,28 +1159,25 @@ export default function DocumentViewer({
             currentPage,
           ),
         );
-
         return;
       }
 
       goToPage(
-        parsedPage,
+        parsed,
       );
     };
 
   const handlePageInputKeyDown =
     (
-      event:
-        React.KeyboardEvent<HTMLInputElement>,
+      event: ReactKeyboardEvent<HTMLInputElement>,
     ) => {
       if (
         event.key ===
         "Enter"
       ) {
         event.preventDefault();
-
         commitPageInput();
-
+        event.currentTarget.blur();
         return;
       }
 
@@ -1230,88 +1197,78 @@ export default function DocumentViewer({
       }
     };
 
+  const viewerStyle: CSSProperties =
+    {
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      position: "relative",
+      boxSizing: "border-box",
+    };
+
+  const navigationStyle:
+    CSSProperties = {
+      position: "sticky",
+      top: 0,
+      zIndex: 1000,
+      width: "100%",
+      minWidth: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      padding: "8px 10px",
+      margin: 0,
+      boxSizing: "border-box",
+      background:
+        "rgba(255,255,255,0.97)",
+      borderBottom:
+        "1px solid rgba(15,23,42,0.10)",
+      boxShadow:
+        "0 2px 12px rgba(15,23,42,0.08)",
+      backdropFilter:
+        "blur(12px)",
+      WebkitBackdropFilter:
+        "blur(12px)",
+      isolation: "isolate",
+    };
+
+  const navigationButtonStyle:
+    CSSProperties = {
+      width: 38,
+      minWidth: 38,
+      height: 36,
+      padding: 0,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      border:
+        "1px solid #d1d5db",
+      borderRadius: 8,
+      fontSize: 20,
+      fontWeight: 700,
+      lineHeight: 1,
+      flexShrink: 0,
+      touchAction: "manipulation",
+      boxSizing: "border-box",
+    };
+
   return (
     <div
       ref={
         viewerRef
       }
-      className="pdf-document"
-      style={{
-        width: "100%",
-        maxWidth: "100%",
-        minWidth: 0,
-
-        /*
-         * The .canvas-area remains the
-         * vertical scrolling container.
-         */
-        overflow:
-          "visible",
-
-        position:
-          "relative",
-
-        boxSizing:
-          "border-box",
-      }}
+      className="signflow-pdf-viewer"
+      style={
+        viewerStyle
+      }
     >
       {numPages > 0 && (
         <div
-          className="pdf-page-navigation"
-          style={{
-            position:
-              "sticky",
-
-            top: 0,
-
-            zIndex: 1000,
-
-            display:
-              "flex",
-
-            alignItems:
-              "center",
-
-            justifyContent:
-              "center",
-
-            gap: 8,
-
-            width:
-              "100%",
-
-            minWidth: 0,
-
-            padding:
-              "10px 12px",
-
-            marginBottom:
-              12,
-
-            boxSizing:
-              "border-box",
-
-            background:
-              "rgba(255,255,255,0.97)",
-
-            borderBottom:
-              "1px solid rgba(15,23,42,0.10)",
-
-            boxShadow:
-              "0 2px 12px rgba(15,23,42,0.08)",
-
-            backdropFilter:
-              "blur(12px)",
-
-            WebkitBackdropFilter:
-              "blur(12px)",
-
-            isolation:
-              "isolate",
-
-            flexShrink:
-              0,
-          }}
+          className="signflow-pdf-navigation"
+          style={
+            navigationStyle
+          }
         >
           <button
             type="button"
@@ -1324,94 +1281,37 @@ export default function DocumentViewer({
             aria-label="Previous page"
             title="Previous page"
             style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              justifyContent:
-                "center",
-
-              minWidth:
-                38,
-
-              width:
-                38,
-
-              height:
-                36,
-
-              padding:
-                0,
-
-              border:
-                "1px solid #d1d5db",
-
-              borderRadius:
-                8,
-
+              ...navigationButtonStyle,
               background:
                 currentPage <= 1
                   ? "#f3f4f6"
                   : "#ffffff",
-
               color:
                 currentPage <= 1
                   ? "#9ca3af"
                   : "#111827",
-
               cursor:
                 currentPage <= 1
                   ? "not-allowed"
                   : "pointer",
-
-              fontSize:
-                20,
-
-              fontWeight:
-                700,
-
-              lineHeight:
-                1,
-
-              touchAction:
-                "manipulation",
-
-              flexShrink:
-                0,
             }}
           >
             ‹
           </button>
 
           <div
+            className="signflow-pdf-page-indicator"
             style={{
-              display:
-                "flex",
-
-              alignItems:
-                "center",
-
-              justifyContent:
-                "center",
-
-              gap: 7,
-
-              whiteSpace:
-                "nowrap",
-
-              fontSize:
-                14,
-
-              fontWeight:
-                600,
-
-              color:
-                "#374151",
-
-              flexShrink:
-                0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              minWidth: 0,
+              whiteSpace: "nowrap",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#374151",
+              flexShrink: 1,
             }}
           >
             <span>
@@ -1435,50 +1335,27 @@ export default function DocumentViewer({
               }
               aria-label="Current page"
               style={{
-                width:
-                  48,
-
-                height:
-                  34,
-
-                padding:
-                  "0 8px",
-
+                width: 48,
+                minWidth: 48,
+                height: 34,
+                padding: "0 6px",
                 border:
                   "1px solid #d1d5db",
-
-                borderRadius:
-                  7,
-
-                background:
-                  "#ffffff",
-
-                color:
-                  "#111827",
-
-                textAlign:
-                  "center",
-
-                fontSize:
-                  14,
-
-                fontWeight:
-                  600,
-
-                outline:
-                  "none",
-
+                borderRadius: 7,
+                background: "#ffffff",
+                color: "#111827",
+                textAlign: "center",
+                fontSize: 14,
+                fontWeight: 600,
+                outline: "none",
                 boxSizing:
                   "border-box",
-
-                flexShrink:
-                  0,
+                flexShrink: 0,
               }}
             />
 
             <span>
-              of{" "}
-              {numPages}
+              of {numPages}
             </span>
           </div>
 
@@ -1494,65 +1371,22 @@ export default function DocumentViewer({
             aria-label="Next page"
             title="Next page"
             style={{
-              display:
-                "inline-flex",
-
-              alignItems:
-                "center",
-
-              justifyContent:
-                "center",
-
-              minWidth:
-                38,
-
-              width:
-                38,
-
-              height:
-                36,
-
-              padding:
-                0,
-
-              border:
-                "1px solid #d1d5db",
-
-              borderRadius:
-                8,
-
+              ...navigationButtonStyle,
               background:
                 currentPage >=
                 numPages
                   ? "#f3f4f6"
                   : "#ffffff",
-
               color:
                 currentPage >=
                 numPages
                   ? "#9ca3af"
                   : "#111827",
-
               cursor:
                 currentPage >=
                 numPages
                   ? "not-allowed"
                   : "pointer",
-
-              fontSize:
-                20,
-
-              fontWeight:
-                700,
-
-              lineHeight:
-                1,
-
-              touchAction:
-                "manipulation",
-
-              flexShrink:
-                0,
             }}
           >
             ›
@@ -1560,142 +1394,153 @@ export default function DocumentViewer({
         </div>
       )}
 
-      <Document
-        file={file}
-        onLoadSuccess={({
-          numPages:
-            loadedNumPages,
-        }) => {
-          setNumPages(
-            loadedNumPages,
-          );
-
-          setCurrentPage(
-            1,
-          );
-
-          setPageInput(
-            "1",
-          );
-
-          pageRefs.current.clear();
+      <div
+        ref={
+          scrollRef
+        }
+        className="signflow-pdf-scroll"
+        style={{
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          overflowX:
+            safeZoom > 1
+              ? "auto"
+              : "hidden",
+          overflowY:
+            "visible",
+          boxSizing:
+            "border-box",
+          overscrollBehaviorX:
+            "contain",
         }}
-        onLoadError={(
-          error,
-        ) => {
-          console.error(
-            "PDF loading error:",
-            error,
-          );
-
-          setNumPages(
-            0,
-          );
-
-          setCurrentPage(
-            1,
-          );
-
-          setPageInput(
-            "1",
-          );
-
-          pageRefs.current.clear();
-        }}
-        loading={
-          <div className="pdf-loading">
-            Loading document...
-          </div>
-        }
-        error={
-          <div className="pdf-loading">
-            Unable to load this PDF.
-          </div>
-        }
-        noData={
-          <div className="pdf-loading">
-            No PDF document selected.
-          </div>
-        }
       >
-        <div
-          style={{
-            display:
-              "flex",
+        <Document
+          file={file}
+          onLoadSuccess={({
+            numPages:
+              loadedNumPages,
+          }) => {
+            setNumPages(
+              loadedNumPages,
+            );
 
-            flexDirection:
-              "column",
+            setCurrentPage(
+              1,
+            );
 
-            alignItems:
-              safeZoom > 1
-                ? "flex-start"
-                : "center",
+            setPageInput(
+              "1",
+            );
 
-            gap: 24,
-
-            width:
-              "100%",
-
-            minWidth: 0,
-
-            boxSizing:
-              "border-box",
-
-            overflow:
-              "visible",
+            pageRefs.current.clear();
           }}
+          onLoadError={(
+            error,
+          ) => {
+            console.error(
+              "PDF loading error:",
+              error,
+            );
+
+            setNumPages(0);
+            setCurrentPage(1);
+            setPageInput("1");
+            pageRefs.current.clear();
+          }}
+          loading={
+            <div className="pdf-loading">
+              Loading document...
+            </div>
+          }
+          error={
+            <div className="pdf-loading">
+              Unable to load this PDF.
+            </div>
+          }
+          noData={
+            <div className="pdf-loading">
+              No PDF document selected.
+            </div>
+          }
         >
-          {Array.from(
-            {
-              length:
-                numPages,
-            },
-            (_, index) => (
-              <PdfPage
-                key={
-                  index + 1
-                }
-                pageNumber={
-                  index + 1
-                }
-                activeTool={
-                  activeTool
-                }
-                fields={
-                  fields
-                }
-                selectedFieldId={
-                  selectedFieldId
-                }
-                zoom={
-                  safeZoom
-                }
-                availableWidth={
-                  availableWidth
-                }
-                onAddField={
-                  onAddField
-                }
-                onUpdateField={
-                  onUpdateField
-                }
-                onDeleteField={
-                  onDeleteField
-                }
-                onSelectField={
-                  onSelectField
-                }
-                onPageRef={
-                  registerPageRef
-                }
-                onPageVisible={
-                  handlePageVisible
-                }
-              />
-            ),
-          )}
-        </div>
-      </Document>
+          <div
+            className="signflow-pdf-pages"
+            style={{
+              width:
+                "100%",
+              minWidth:
+                safeZoom > 1
+                  ? EDITOR_PAGE_WIDTH *
+                    safeZoom
+                  : "100%",
+              display:
+                "flex",
+              flexDirection:
+                "column",
+              alignItems:
+                safeZoom > 1
+                  ? "flex-start"
+                  : "stretch",
+              gap: 24,
+              padding:
+                "16px 0 32px",
+              boxSizing:
+                "border-box",
+            }}
+          >
+            {Array.from(
+              {
+                length:
+                  numPages,
+              },
+              (_, index) => (
+                <PdfPage
+                  key={
+                    index + 1
+                  }
+                  pageNumber={
+                    index + 1
+                  }
+                  activeTool={
+                    activeTool
+                  }
+                  fields={
+                    fields
+                  }
+                  selectedFieldId={
+                    selectedFieldId
+                  }
+                  zoom={
+                    safeZoom
+                  }
+                  availableWidth={
+                    availableWidth
+                  }
+                  onAddField={
+                    onAddField
+                  }
+                  onUpdateField={
+                    onUpdateField
+                  }
+                  onDeleteField={
+                    onDeleteField
+                  }
+                  onSelectField={
+                    onSelectField
+                  }
+                  onPageRef={
+                    registerPageRef
+                  }
+                  onPageVisible={
+                    handlePageVisible
+                  }
+                />
+              ),
+            )}
+          </div>
+        </Document>
+      </div>
     </div>
   );
 }
