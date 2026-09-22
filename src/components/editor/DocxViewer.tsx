@@ -4,6 +4,8 @@ import {
   useState,
 } from "react";
 
+import type { MouseEvent } from "react";
+
 import mammoth from "mammoth";
 
 import type { DocumentField } from "../../types/document";
@@ -20,6 +22,8 @@ interface DocxViewerProps {
   activeTool: string;
   fields: DocumentField[];
   selectedFieldId: string | null;
+
+  zoom?: number;
 
   onAddField: (
     page: number,
@@ -47,13 +51,24 @@ interface DocxViewerProps {
 }
 
 /*
- * SignFlow keeps document fields in a
+ * --------------------------------------------------
+ * INTERNAL DOCUMENT SIZE
+ * --------------------------------------------------
+ *
+ * SignFlow stores DOCX field coordinates in a
  * fixed internal coordinate system.
  *
- * The document is visually scaled on
- * smaller screens.
+ * The visual document can then be scaled without
+ * changing the stored field coordinates.
  */
+
 const DOCUMENT_WIDTH = 820;
+
+const MIN_DOCUMENT_HEIGHT = 1120;
+
+const MIN_ZOOM = 0.5;
+
+const MAX_ZOOM = 1.5;
 
 const SUPPORTED_TOOLS = [
   "text",
@@ -107,11 +122,25 @@ const getFieldSize = (
   }
 };
 
+const clamp = (
+  value: number,
+  min: number,
+  max: number,
+) =>
+  Math.min(
+    max,
+    Math.max(
+      min,
+      value,
+    ),
+  );
+
 export default function DocxViewer({
   file,
   activeTool,
   fields,
   selectedFieldId,
+  zoom = 100,
   onAddField,
   onUpdateField,
   onDeleteField,
@@ -143,11 +172,31 @@ export default function DocxViewer({
     useState(1);
 
   const [documentHeight, setDocumentHeight] =
-    useState(1120);
+    useState(
+      MIN_DOCUMENT_HEIGHT,
+    );
 
   /*
-   * Load DOCX and convert it to HTML.
+   * --------------------------------------------------
+   * NORMALIZED ZOOM
+   * --------------------------------------------------
    */
+
+  const safeZoom =
+    clamp(
+      Number.isFinite(zoom)
+        ? zoom / 100
+        : 1,
+      MIN_ZOOM,
+      MAX_ZOOM,
+    );
+
+  /*
+   * --------------------------------------------------
+   * LOAD DOCX
+   * --------------------------------------------------
+   */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -167,7 +216,8 @@ export default function DocxViewer({
                 arrayBuffer,
               },
               {
-                includeDefaultStyleMap: true,
+                includeDefaultStyleMap:
+                  true,
               },
             );
 
@@ -206,17 +256,24 @@ export default function DocxViewer({
   }, [file]);
 
   /*
-   * Calculate the visual scale.
+   * --------------------------------------------------
+   * CALCULATE FIT SCALE
+   * --------------------------------------------------
    *
-   * Desktop:
-   *   820px document = scale 1
+   * This represents the responsive scale required
+   * to fit the document into the available viewport.
    *
-   * Mobile:
-   *   available width / 820px
+   * Zoom is applied separately.
    *
-   * Example:
-   *   328px screen -> 0.4 scale
+   * Therefore:
+   *
+   * final visual scale =
+   * responsive fit scale × user zoom
+   *
+   * The internal document remains 820px wide.
+   * --------------------------------------------------
    */
+
   useEffect(() => {
     if (isLoading || error) {
       return;
@@ -243,26 +300,39 @@ export default function DocxViewer({
           return;
         }
 
-        const nextScale =
+        /*
+         * Leave a small amount of breathing room
+         * around the document.
+         */
+
+        const horizontalPadding =
+          availableWidth <= 480
+            ? 8
+            : 24;
+
+        const usableWidth =
+          Math.max(
+            1,
+            availableWidth -
+              horizontalPadding * 2,
+          );
+
+        const fitScale =
           Math.min(
             1,
-            availableWidth /
+            usableWidth /
               DOCUMENT_WIDTH,
           );
 
         setDocumentScale(
-          nextScale,
+          fitScale,
         );
 
-        /*
-         * The page itself remains
-         * 820px wide internally.
-         *
-         * We only scale the visual
-         * representation.
-         */
         const naturalHeight =
-          page.scrollHeight;
+          Math.max(
+            page.scrollHeight,
+            MIN_DOCUMENT_HEIGHT,
+          );
 
         if (
           naturalHeight > 0
@@ -307,9 +377,14 @@ export default function DocxViewer({
   ]);
 
   /*
-   * Recalculate page height after
-   * the document has rendered.
+   * --------------------------------------------------
+   * DOCUMENT HEIGHT
+   * --------------------------------------------------
+   *
+   * The actual DOCX page is allowed to determine
+   * its natural height.
    */
+
   useEffect(() => {
     if (
       isLoading ||
@@ -331,7 +406,10 @@ export default function DocxViewer({
           height > 0
         ) {
           setDocumentHeight(
-            height,
+            Math.max(
+              MIN_DOCUMENT_HEIGHT,
+              height,
+            ),
           );
         }
       };
@@ -368,9 +446,17 @@ export default function DocxViewer({
   ]);
 
   /*
-   * Give App.tsx the actual document
-   * element used for DOCX export.
+   * --------------------------------------------------
+   * DOCUMENT READY
+   * --------------------------------------------------
+   *
+   * App/exportDocx needs the actual unscaled
+   * document element.
+   *
+   * We intentionally pass documentRef.current,
+   * not the visual wrapper.
    */
+
   useEffect(() => {
     if (
       isLoading ||
@@ -391,21 +477,53 @@ export default function DocxViewer({
     onDocumentReady,
   ]);
 
+  /*
+   * --------------------------------------------------
+   * FIELD MODE
+   * --------------------------------------------------
+   */
+
   const canAddField =
     SUPPORTED_TOOLS.includes(
       activeTool,
     );
 
   /*
-   * Add a field to the document.
+   * --------------------------------------------------
+   * FINAL VISUAL SCALE
+   * --------------------------------------------------
    *
-   * The click happens on the visually
-   * scaled page, so we convert the
-   * screen position back into the
-   * 820px internal coordinate system.
+   * documentScale handles responsive fitting.
+   *
+   * safeZoom handles the user's selected zoom.
+   *
+   * At 100%:
+   *
+   * finalScale = documentScale
+   *
+   * At 150%:
+   *
+   * finalScale = documentScale × 1.5
    */
+
+  const finalScale =
+    documentScale *
+    safeZoom;
+
+  /*
+   * --------------------------------------------------
+   * ADD FIELD
+   * --------------------------------------------------
+   *
+   * The click position is measured against the
+   * visually transformed document.
+   *
+   * We convert it back into the fixed 820px
+   * internal coordinate system.
+   */
+
   const handleDocumentClick = (
-    event: React.MouseEvent<HTMLDivElement>,
+    event: MouseEvent<HTMLDivElement>,
   ) => {
     if (!canAddField) {
       return;
@@ -422,12 +540,22 @@ export default function DocxViewer({
       event.target as HTMLElement;
 
     /*
-     * Don't add a new field when
-     * interacting with an existing field.
+     * Never create a new field while interacting
+     * with an existing field or one of its controls.
      */
+
     if (
       target.closest(
-        ".document-field, .field-drag-handle, .field-delete, .field-resize-handle, .signature-resize-handle, .date-resize-handle, .checkbox-resize-handle, .name-resize-handle, .email-resize-handle, button, input, textarea, select",
+        ".document-field, " +
+          ".field-drag-handle, " +
+          ".field-delete, " +
+          ".field-resize-handle, " +
+          ".signature-resize-handle, " +
+          ".date-resize-handle, " +
+          ".checkbox-resize-handle, " +
+          ".name-resize-handle, " +
+          ".email-resize-handle, " +
+          "button, input, textarea, select",
       )
     ) {
       return;
@@ -444,18 +572,25 @@ export default function DocxViewer({
     }
 
     /*
-     * Because the document is visually
-     * scaled, determine its actual
-     * displayed scale from the DOM.
+     * The DOM width is the visually transformed
+     * width of the document.
+     *
+     * Convert that back to the 820px internal
+     * coordinate system.
      */
-    const scale =
+
+    const safeScale =
       rect.width /
       DOCUMENT_WIDTH;
 
-    const safeScale =
-      scale > 0
-        ? scale
-        : 1;
+    if (
+      !Number.isFinite(
+        safeScale,
+      ) ||
+      safeScale <= 0
+    ) {
+      return;
+    }
 
     const displayX =
       event.clientX -
@@ -474,10 +609,10 @@ export default function DocxViewer({
       );
 
     /*
-     * Convert field dimensions from
-     * internal document coordinates
-     * into displayed screen dimensions.
+     * Convert the field dimensions from internal
+     * coordinates to displayed coordinates.
      */
+
     const displayFieldWidth =
       fieldWidth *
       safeScale;
@@ -487,9 +622,9 @@ export default function DocxViewer({
       safeScale;
 
     /*
-     * Keep the complete field inside
-     * the visible document page.
+     * Keep the complete field inside the page.
      */
+
     const maxDisplayX =
       Math.max(
         0,
@@ -523,9 +658,9 @@ export default function DocxViewer({
       );
 
     /*
-     * Convert back to internal
-     * 820px document coordinates.
+     * Convert to internal document coordinates.
      */
+
     const x =
       clampedDisplayX /
       safeScale;
@@ -543,20 +678,27 @@ export default function DocxViewer({
   };
 
   /*
-   * Render fields.
+   * --------------------------------------------------
+   * RENDER FIELD
+   * --------------------------------------------------
    */
+
   const renderField = (
     field: DocumentField,
   ) => {
     const commonProps = {
       field,
+
       selected:
         selectedFieldId ===
         field.id,
+
       onUpdate:
         onUpdateField,
+
       onDelete:
         onDeleteField,
+
       onSelect:
         onSelectField,
     };
@@ -615,6 +757,12 @@ export default function DocxViewer({
     }
   };
 
+  /*
+   * --------------------------------------------------
+   * LOADING
+   * --------------------------------------------------
+   */
+
   if (isLoading) {
     return (
       <div className="docx-loading">
@@ -626,6 +774,12 @@ export default function DocxViewer({
       </div>
     );
   }
+
+  /*
+   * --------------------------------------------------
+   * ERROR
+   * --------------------------------------------------
+   */
 
   if (error) {
     return (
@@ -646,10 +800,28 @@ export default function DocxViewer({
   }
 
   /*
-   * The outer viewer is always responsive.
+   * --------------------------------------------------
+   * VISUAL DOCUMENT DIMENSIONS
+   * --------------------------------------------------
    *
-   * There is NO horizontal scrolling.
+   * The wrapper represents the actual visible size
+   * after responsive fitting and user zoom.
    */
+
+  const visualDocumentWidth =
+    DOCUMENT_WIDTH *
+    finalScale;
+
+  const visualDocumentHeight =
+    documentHeight *
+    finalScale;
+
+  /*
+   * --------------------------------------------------
+   * RESPONSIVE DOCX EDITOR
+   * --------------------------------------------------
+   */
+
   return (
     <div
       ref={viewerRef}
@@ -657,146 +829,234 @@ export default function DocxViewer({
       style={{
         width: "100%",
         maxWidth: "100%",
-        overflow: "hidden",
-        boxSizing: "border-box",
+        minWidth: 0,
+
+        boxSizing:
+          "border-box",
+
+        overflowX:
+          safeZoom > 1
+            ? "auto"
+            : "hidden",
+
+        overflowY:
+          "visible",
+
+        overscrollBehaviorX:
+          "contain",
+
+        WebkitOverflowScrolling:
+          "touch",
       }}
     >
       {/*
-       * This frame represents the
-       * VISUAL size of the document.
+       * ------------------------------------------------
+       * ZOOM SCROLL AREA
+       * ------------------------------------------------
        *
-       * On mobile it becomes smaller.
-       * The actual page inside remains
-       * 820px wide internally.
+       * At normal zoom this remains centered.
+       *
+       * Above 100% zoom the document can extend
+       * beyond the viewport and becomes horizontally
+       * scrollable.
        */}
+
       <div
         style={{
-          width:
-            `${DOCUMENT_WIDTH * documentScale}px`,
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
 
-          height:
-            `${documentHeight * documentScale + 56}px`,
+          overflowX:
+            safeZoom > 1
+              ? "auto"
+              : "hidden",
 
-          maxWidth:
-            "100%",
-
-          margin:
-            "0 auto",
-
-          position:
-            "relative",
-
-          overflow:
+          overflowY:
             "visible",
+
+          overscrollBehaviorX:
+            "contain",
+
+          WebkitOverflowScrolling:
+            "touch",
 
           boxSizing:
             "border-box",
+
+          display: "flex",
+
+          justifyContent:
+            safeZoom <= 1
+              ? "center"
+              : "flex-start",
+
+          alignItems:
+            "flex-start",
+
+          padding:
+            safeZoom > 1
+              ? "0 8px 24px"
+              : "0 0 24px",
         }}
       >
         {/*
-         * This is the real document page.
+         * ------------------------------------------------
+         * VISUAL FRAME
+         * ------------------------------------------------
          *
-         * It remains 820px internally,
-         * then the entire page is scaled.
+         * This represents the transformed size of the
+         * document.
          *
-         * Content + fields therefore scale
-         * together and stay aligned.
+         * It is NOT passed to exportDocx.
          */}
+
         <div
-          ref={documentRef}
-          className={
-            canAddField
-              ? "docx-page docx-field-mode"
-              : "docx-page"
-          }
-          onClick={
-            handleDocumentClick
-          }
           style={{
-            position:
-              "absolute",
-
-            top: 56,
-            left: 0,
-
             width:
-              `${DOCUMENT_WIDTH}px`,
+              `${visualDocumentWidth}px`,
 
-            minWidth:
-              `${DOCUMENT_WIDTH}px`,
+            height:
+              `${visualDocumentHeight}px`,
 
-            maxWidth:
-              `${DOCUMENT_WIDTH}px`,
+            flex:
+              "0 0 auto",
 
-            minHeight:
-              `${documentHeight}px`,
+            position:
+              "relative",
 
-            margin: 0,
+            overflow:
+              "visible",
 
             boxSizing:
               "border-box",
-
-            background:
-              "#ffffff",
-
-            transform:
-              `scale(${documentScale})`,
-
-            transformOrigin:
-              "top left",
-
-            isolation:
-              "isolate",
           }}
         >
-          <div
-            className="docx-content"
-            dangerouslySetInnerHTML={{
-              __html: html,
-            }}
-          />
+          {/*
+           * ------------------------------------------------
+           * REAL DOCX PAGE
+           * ------------------------------------------------
+           *
+           * This element always remains 820px wide
+           * internally.
+           *
+           * Both the DOCX content and field layer
+           * receive the exact same transform.
+           */}
 
           <div
-            className="docx-field-layer"
+            ref={documentRef}
+            className={
+              canAddField
+                ? "docx-page docx-field-mode"
+                : "docx-page"
+            }
+            onClick={
+              handleDocumentClick
+            }
             style={{
               position:
                 "absolute",
 
               top: 0,
               left: 0,
-              right: 0,
-              bottom: 0,
 
               width:
-                "100%",
+                `${DOCUMENT_WIDTH}px`,
+
+              minWidth:
+                `${DOCUMENT_WIDTH}px`,
+
+              maxWidth:
+                `${DOCUMENT_WIDTH}px`,
 
               minHeight:
-                "100%",
+                `${documentHeight}px`,
 
-              pointerEvents:
-                "none",
+              margin: 0,
 
-              zIndex: 20,
+              boxSizing:
+                "border-box",
 
-              /*
-               * Important:
-               * Field controls, MOVE handles,
-               * delete buttons and resize handles
-               * are allowed to extend outside
-               * their individual field boxes.
-               */
+              background:
+                "#ffffff",
+
+              transform:
+                `scale(${finalScale})`,
+
+              transformOrigin:
+                "top left",
+
+              isolation:
+                "isolate",
+
               overflow:
                 "visible",
             }}
           >
-            {fields
-              .filter(
-                (field) =>
-                  field.page === 1,
-              )
-              .map(
-                renderField,
-              )}
+            {/*
+             * ------------------------------------------------
+             * DOCX CONTENT
+             * ------------------------------------------------
+             */}
+
+            <div
+              className="docx-content"
+              dangerouslySetInnerHTML={{
+                __html: html,
+              }}
+            />
+
+            {/*
+             * ------------------------------------------------
+             * FIELD LAYER
+             * ------------------------------------------------
+             *
+             * It uses the exact same 820px internal
+             * coordinate system as the DOCX page.
+             *
+             * Because it is inside the same transformed
+             * page, fields remain aligned at every zoom.
+             */}
+
+            <div
+              className="docx-field-layer"
+              style={{
+                position:
+                  "absolute",
+
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+
+                width:
+                  "100%",
+
+                minHeight:
+                  "100%",
+
+                pointerEvents:
+                  "none",
+
+                zIndex: 20,
+
+                overflow:
+                  "visible",
+
+                lineHeight:
+                  "normal",
+              }}
+            >
+              {fields
+                .filter(
+                  (field) =>
+                    field.page === 1,
+                )
+                .map(
+                  renderField,
+                )}
+            </div>
           </div>
         </div>
       </div>

@@ -4,6 +4,8 @@ import {
   useState,
 } from "react";
 
+import type { MouseEvent } from "react";
+
 import type { DocumentField } from "../../types/document";
 
 import TextField from "./TextField";
@@ -18,6 +20,8 @@ interface ImageViewerProps {
   activeTool: string;
   fields: DocumentField[];
   selectedFieldId: string | null;
+
+  zoom?: number;
 
   onAddField: (
     page: number,
@@ -87,11 +91,25 @@ const FIELD_DISPLAY_SIZES: Record<
   },
 };
 
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 1.5;
+
+const clamp = (
+  value: number,
+  min: number,
+  max: number,
+) =>
+  Math.min(
+    max,
+    Math.max(min, value),
+  );
+
 export default function ImageViewer({
   file,
   activeTool,
   fields,
   selectedFieldId,
+  zoom = 100,
   onAddField,
   onUpdateField,
   onDeleteField,
@@ -118,8 +136,23 @@ export default function ImageViewer({
   const [naturalHeight, setNaturalHeight] =
     useState(0);
 
-  const [displayWidth, setDisplayWidth] =
+  const [fitDisplayWidth, setFitDisplayWidth] =
     useState(0);
+
+  /*
+   * --------------------------------------------------
+   * NORMALIZED ZOOM
+   * --------------------------------------------------
+   */
+
+  const safeZoom =
+    clamp(
+      Number.isFinite(zoom)
+        ? zoom / 100
+        : 1,
+      MIN_ZOOM,
+      MAX_ZOOM,
+    );
 
   /*
    * --------------------------------------------------
@@ -130,7 +163,8 @@ export default function ImageViewer({
   useEffect(() => {
     let cancelled = false;
 
-    const reader = new FileReader();
+    const reader =
+      new FileReader();
 
     reader.onload = () => {
       if (cancelled) {
@@ -149,12 +183,9 @@ export default function ImageViewer({
       );
 
       setImageLoaded(false);
-
       setNaturalWidth(0);
-
       setNaturalHeight(0);
-
-      setDisplayWidth(0);
+      setFitDisplayWidth(0);
     };
 
     reader.onerror = () => {
@@ -163,14 +194,10 @@ export default function ImageViewer({
       }
 
       setImageUrl("");
-
       setImageLoaded(false);
-
       setNaturalWidth(0);
-
       setNaturalHeight(0);
-
-      setDisplayWidth(0);
+      setFitDisplayWidth(0);
     };
 
     reader.readAsDataURL(file);
@@ -189,12 +216,13 @@ export default function ImageViewer({
 
   /*
    * --------------------------------------------------
-   * RESPONSIVE IMAGE SIZE
+   * RESPONSIVE FIT WIDTH
    *
-   * The image fields use the original image
-   * coordinate system.
+   * fitDisplayWidth represents the width the image
+   * would naturally occupy at 100% zoom.
    *
-   * Only the visual presentation is scaled.
+   * The actual displayed width is calculated from
+   * this value and safeZoom.
    * --------------------------------------------------
    */
 
@@ -203,20 +231,14 @@ export default function ImageViewer({
       return;
     }
 
-    const frame =
-      frameRef.current;
-
     const viewer =
       viewerRef.current;
 
-    if (!frame || !viewer) {
+    if (!viewer) {
       return;
     }
 
-    if (
-      !naturalWidth ||
-      !naturalHeight
-    ) {
+    if (!naturalWidth || !naturalHeight) {
       return;
     }
 
@@ -228,13 +250,6 @@ export default function ImageViewer({
         return;
       }
 
-      /*
-       * Keep a small visual breathing room
-       * around the document.
-       *
-       * The value is deliberately responsive
-       * rather than using a minimum width.
-       */
       const horizontalPadding =
         viewerWidth <= 480
           ? 8
@@ -247,17 +262,13 @@ export default function ImageViewer({
             horizontalPadding * 2,
         );
 
-      /*
-       * Never make the displayed image
-       * wider than the available viewport.
-       */
       const nextWidth =
         Math.min(
           naturalWidth,
           availableWidth,
         );
 
-      setDisplayWidth(
+      setFitDisplayWidth(
         Math.max(
           1,
           nextWidth,
@@ -303,18 +314,14 @@ export default function ImageViewer({
     const height =
       image.naturalHeight;
 
-    if (
-      !width ||
-      !height
-    ) {
+    if (!width || !height) {
       return;
     }
 
     setNaturalWidth(width);
-
     setNaturalHeight(height);
 
-    setDisplayWidth(
+    setFitDisplayWidth(
       image.clientWidth ||
         width,
     );
@@ -324,13 +331,29 @@ export default function ImageViewer({
 
   /*
    * --------------------------------------------------
-   * SCALE
+   * DISPLAY DIMENSIONS
+   * --------------------------------------------------
+   *
+   * The image always keeps its original coordinate
+   * system internally.
+   *
+   * Zoom only changes the visual scale.
    * --------------------------------------------------
    */
 
+  const baseWidth =
+    fitDisplayWidth > 0
+      ? fitDisplayWidth
+      : naturalWidth;
+
+  const displayWidth =
+    Math.max(
+      1,
+      baseWidth * safeZoom,
+    );
+
   const safeScale =
-    naturalWidth > 0 &&
-    displayWidth > 0
+    naturalWidth > 0
       ? displayWidth /
         naturalWidth
       : 1;
@@ -354,13 +377,17 @@ export default function ImageViewer({
    * --------------------------------------------------
    * ADD FIELD
    *
-   * Screen coordinates are converted into
-   * original image coordinates.
+   * The click happens in displayed coordinates.
+   *
+   * We convert the click back into the original
+   * image coordinate system before saving the field.
+   *
+   * This keeps fields stable when zoom changes.
    * --------------------------------------------------
    */
 
   const handlePageClick = (
-    event: React.MouseEvent<HTMLDivElement>,
+    event: MouseEvent<HTMLDivElement>,
   ) => {
     if (!canAddField) {
       return;
@@ -373,10 +400,6 @@ export default function ImageViewer({
       return;
     }
 
-    /*
-     * Do not create another field when
-     * clicking an existing field.
-     */
     const target =
       event.target as HTMLElement;
 
@@ -428,21 +451,33 @@ export default function ImageViewer({
       FIELD_DISPLAY_SIZES.text;
 
     /*
-     * Make sure the entire field
-     * starts inside the image.
+     * Field dimensions are stored in the original
+     * image coordinate system.
+     *
+     * Convert them to the currently displayed size
+     * before clamping the click.
      */
+
+    const fieldDisplayWidth =
+      fieldSize.width *
+      safeScale;
+
+    const fieldDisplayHeight =
+      fieldSize.height *
+      safeScale;
+
     const maxDisplayX =
       Math.max(
         0,
         rect.width -
-          fieldSize.width,
+          fieldDisplayWidth,
       );
 
     const maxDisplayY =
       Math.max(
         0,
         rect.height -
-          fieldSize.height,
+          fieldDisplayHeight,
       );
 
     const clampedDisplayX =
@@ -464,9 +499,10 @@ export default function ImageViewer({
       );
 
     /*
-     * Convert displayed coordinates
-     * back into natural image coordinates.
+     * Convert displayed coordinates back into
+     * original image coordinates.
      */
+
     const x =
       clampedDisplayX /
       safeScale;
@@ -613,8 +649,7 @@ export default function ImageViewer({
           display: "flex",
           justifyContent: "center",
           alignItems: "flex-start",
-          padding:
-            "16px 8px",
+          padding: "16px 8px",
           boxSizing: "border-box",
           overflow: "hidden",
         }}
@@ -657,140 +692,111 @@ export default function ImageViewer({
         maxWidth: "100%",
         minWidth: 0,
         minHeight: "100%",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
+        boxSizing: "border-box",
         padding:
           "16px 8px",
-        boxSizing: "border-box",
-        overflowX: "hidden",
-        overflowY: "visible",
+        overflow: "hidden",
         overscrollBehaviorX:
           "none",
       }}
     >
+      {/*
+       * This inner container owns horizontal scrolling.
+       *
+       * This is intentional because the global responsive
+       * CSS locks horizontal overflow on the main canvas.
+       *
+       * At normal zoom the image remains centered.
+       * At larger zoom the image becomes scrollable.
+       */}
+
       <div
-        ref={frameRef}
-        className={
-          canAddField
-            ? "image-page-field-mode"
-            : ""
-        }
-        onClick={
-          handlePageClick
-        }
+        className="image-scroll-container"
         style={{
-          position: "relative",
-
-          width:
-            `${displayWidth}px`,
-
-          height:
-            `${displayHeight}px`,
-
+          width: "100%",
           maxWidth: "100%",
-
           minWidth: 0,
-
-          flex:
-            "0 1 auto",
-
-          background: "#ffffff",
-
-          boxShadow:
-            "0 8px 30px rgba(0, 0, 0, 0.12)",
-
-          overflow: "visible",
-
+          overflowX:
+            safeZoom > 1
+              ? "auto"
+              : "hidden",
+          overflowY: "visible",
+          overscrollBehaviorX:
+            "contain",
+          WebkitOverflowScrolling:
+            "touch",
           boxSizing:
             "border-box",
-
-          cursor:
-            canAddField
-              ? "crosshair"
-              : "default",
-
-          touchAction:
-            canAddField
-              ? "manipulation"
-              : "auto",
+          display: "flex",
+          justifyContent:
+            safeZoom <= 1
+              ? "center"
+              : "flex-start",
+          alignItems:
+            "flex-start",
         }}
       >
-        {/*
-         * The internal document remains
-         * at its original image dimensions.
-         *
-         * The complete document is then
-         * visually scaled as one unit.
-         */}
         <div
+          ref={frameRef}
+          className={
+            canAddField
+              ? "image-page-field-mode"
+              : ""
+          }
+          onClick={
+            handlePageClick
+          }
           style={{
-            position: "absolute",
-
-            top: 0,
-
-            left: 0,
+            position: "relative",
 
             width:
-              `${naturalWidth}px`,
+              `${displayWidth}px`,
 
             height:
-              `${naturalHeight}px`,
+              `${displayHeight}px`,
 
-            minWidth:
-              `${naturalWidth}px`,
+            flex:
+              "0 0 auto",
 
-            transformOrigin:
-              "top left",
+            background:
+              "#ffffff",
 
-            transform:
-              `scale(${safeScale})`,
+            boxShadow:
+              "0 8px 30px rgba(0, 0, 0, 0.12)",
+
+            overflow:
+              "visible",
+
+            boxSizing:
+              "border-box",
+
+            cursor:
+              canAddField
+                ? "crosshair"
+                : "default",
+
+            touchAction:
+              canAddField
+                ? "manipulation"
+                : "auto",
           }}
         >
-          <img
-            ref={imageRef}
-            src={imageUrl}
-            alt="Uploaded document"
-            draggable={false}
-            style={{
-              display: "block",
-
-              width:
-                `${naturalWidth}px`,
-
-              height:
-                `${naturalHeight}px`,
-
-              maxWidth: "none",
-
-              maxHeight: "none",
-
-              minWidth:
-                `${naturalWidth}px`,
-
-              userSelect: "none",
-
-              WebkitUserSelect:
-                "none",
-
-              pointerEvents:
-                "none",
-            }}
-          />
-
           {/*
-           * Field layer.
+           * ------------------------------------------------
+           * INTERNAL DOCUMENT
+           * ------------------------------------------------
            *
-           * It uses the same natural
-           * coordinate system as the image.
+           * Everything inside this element uses the
+           * original image dimensions.
+           *
+           * The complete document is visually scaled
+           * with one transform.
            */}
+
           <div
-            className="image-field-layer"
             style={{
               position: "absolute",
-
               top: 0,
-
               left: 0,
 
               width:
@@ -805,26 +811,104 @@ export default function ImageViewer({
               minHeight:
                 `${naturalHeight}px`,
 
-              pointerEvents:
-                "none",
+              transformOrigin:
+                "top left",
 
-              overflow:
-                "visible",
-
-              lineHeight:
-                "normal",
-
-              zIndex: 20,
+              transform:
+                `scale(${safeScale})`,
             }}
           >
-            {fields
-              .filter(
-                (field) =>
-                  field.page === 1,
-              )
-              .map(
-                renderField,
-              )}
+            <img
+              ref={imageRef}
+              src={imageUrl}
+              alt="Uploaded document"
+              draggable={false}
+              style={{
+                display: "block",
+
+                width:
+                  `${naturalWidth}px`,
+
+                height:
+                  `${naturalHeight}px`,
+
+                maxWidth:
+                  "none",
+
+                maxHeight:
+                  "none",
+
+                minWidth:
+                  `${naturalWidth}px`,
+
+                minHeight:
+                  `${naturalHeight}px`,
+
+                userSelect:
+                  "none",
+
+                WebkitUserSelect:
+                  "none",
+
+                pointerEvents:
+                  "none",
+              }}
+            />
+
+            {/*
+             * ------------------------------------------------
+             * FIELD LAYER
+             * ------------------------------------------------
+             *
+             * Field coordinates are always stored against
+             * the original image dimensions.
+             *
+             * Because this layer lives inside the transformed
+             * document, fields automatically follow zoom.
+             */}
+
+            <div
+              className="image-field-layer"
+              style={{
+                position:
+                  "absolute",
+
+                top: 0,
+                left: 0,
+
+                width:
+                  `${naturalWidth}px`,
+
+                height:
+                  `${naturalHeight}px`,
+
+                minWidth:
+                  `${naturalWidth}px`,
+
+                minHeight:
+                  `${naturalHeight}px`,
+
+                pointerEvents:
+                  "none",
+
+                overflow:
+                  "visible",
+
+                lineHeight:
+                  "normal",
+
+                zIndex: 20,
+              }}
+            >
+              {fields
+                .filter(
+                  (field) =>
+                    field.page === 1,
+                )
+                .map(
+                  renderField,
+                )}
+            </div>
           </div>
         </div>
       </div>

@@ -15,6 +15,132 @@ interface ExportPdfOptions {
 
 const EDITOR_PAGE_WIDTH = 820;
 
+const MIN_TEXT_FONT_SIZE = 8;
+const MAX_TEXT_FONT_SIZE = 18;
+
+const MIN_DATE_FONT_SIZE = 8;
+const MAX_DATE_FONT_SIZE = 16;
+
+/* =========================================
+   GENERAL HELPERS
+   ========================================= */
+
+const clamp = (
+  value: number,
+  min: number,
+  max: number,
+): number => {
+  return Math.min(
+    Math.max(value, min),
+    max,
+  );
+};
+
+const safeNumber = (
+  value: number,
+  fallback = 0,
+): number => {
+  return Number.isFinite(value)
+    ? value
+    : fallback;
+};
+
+/* =========================================
+   FIELD GEOMETRY
+   ========================================= */
+
+const getFieldGeometry = (
+  page: PDFPage,
+  field: DocumentField,
+  scale: number,
+) => {
+  const pageHeight =
+    page.getHeight();
+
+  const safeScale =
+    Number.isFinite(scale) &&
+    scale > 0
+      ? scale
+      : 1;
+
+  const fieldWidth = Math.max(
+    1,
+    safeNumber(field.width, 1),
+  );
+
+  const fieldHeight = Math.max(
+    1,
+    safeNumber(field.height, 1),
+  );
+
+  /*
+   * The editor uses an internal width of
+   * 820px regardless of the actual PDF size.
+   */
+  const maxEditorX = Math.max(
+    0,
+    EDITOR_PAGE_WIDTH -
+      fieldWidth,
+  );
+
+  /*
+   * Convert the native PDF page height
+   * back into editor coordinates.
+   */
+  const editorPageHeight =
+    pageHeight / safeScale;
+
+  const maxEditorY = Math.max(
+    0,
+    editorPageHeight -
+      fieldHeight,
+  );
+
+  /*
+   * Protect against invalid or slightly
+   * out of bounds field positions.
+   */
+  const editorX = clamp(
+    safeNumber(field.x),
+    0,
+    maxEditorX,
+  );
+
+  const editorY = clamp(
+    safeNumber(field.y),
+    0,
+    maxEditorY,
+  );
+
+  const pdfWidth =
+    fieldWidth * safeScale;
+
+  const pdfHeight =
+    fieldHeight * safeScale;
+
+  const pdfX =
+    editorX * safeScale;
+
+  /*
+   * React/PDF editor coordinates use a
+   * top left origin.
+   *
+   * PDF coordinates use a bottom left
+   * origin.
+   */
+  const pdfY =
+    pageHeight -
+    (editorY + fieldHeight) *
+      safeScale;
+
+  return {
+    x: pdfX,
+    y: pdfY,
+    width: pdfWidth,
+    height: pdfHeight,
+  };
+};
+
 /* =========================================
    DATA URL → BYTES
    ========================================= */
@@ -22,8 +148,18 @@ const EDITOR_PAGE_WIDTH = 820;
 const dataUrlToBytes = (
   dataUrl: string,
 ): Uint8Array => {
-  const base64 =
-    dataUrl.split(",")[1];
+  const commaIndex =
+    dataUrl.indexOf(",");
+
+  if (commaIndex === -1) {
+    throw new Error(
+      "Invalid image data.",
+    );
+  }
+
+  const base64 = dataUrl
+    .slice(commaIndex + 1)
+    .replace(/\s/g, "");
 
   if (!base64) {
     throw new Error(
@@ -31,26 +167,192 @@ const dataUrlToBytes = (
     );
   }
 
-  const binaryString =
-    atob(base64);
+  try {
+    const binaryString =
+      atob(base64);
 
-  const bytes =
-    new Uint8Array(
-      binaryString.length,
-    );
-
-  for (
-    let index = 0;
-    index < binaryString.length;
-    index += 1
-  ) {
-    bytes[index] =
-      binaryString.charCodeAt(
-        index,
+    const bytes =
+      new Uint8Array(
+        binaryString.length,
       );
+
+    for (
+      let index = 0;
+      index <
+      binaryString.length;
+      index += 1
+    ) {
+      bytes[index] =
+        binaryString.charCodeAt(
+          index,
+        );
+    }
+
+    return bytes;
+  } catch {
+    throw new Error(
+      "Invalid image data.",
+    );
+  }
+};
+
+/* =========================================
+   TEXT WRAPPING
+   ========================================= */
+
+const breakLongWord = (
+  word: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number,
+): string[] => {
+  if (!word) {
+    return [""];
   }
 
-  return bytes;
+  if (
+    font.widthOfTextAtSize(
+      word,
+      fontSize,
+    ) <= maxWidth
+  ) {
+    return [word];
+  }
+
+  const chunks: string[] = [];
+
+  let current = "";
+
+  for (
+    const character of word
+  ) {
+    const candidate =
+      current + character;
+
+    if (
+      current &&
+      font.widthOfTextAtSize(
+        candidate,
+        fontSize,
+      ) > maxWidth
+    ) {
+      chunks.push(current);
+
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks;
+};
+
+const wrapText = (
+  text: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number,
+): string[] => {
+  const normalized =
+    text
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+
+  const paragraphs =
+    normalized.split("\n");
+
+  const lines: string[] = [];
+
+  for (
+    const paragraph of paragraphs
+  ) {
+    const words =
+      paragraph
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (words.length === 0) {
+      lines.push("");
+      continue;
+    }
+
+    let currentLine = "";
+
+    for (
+      const word of words
+    ) {
+      const pieces =
+        breakLongWord(
+          word,
+          font,
+          fontSize,
+          maxWidth,
+        );
+
+      for (
+        let pieceIndex = 0;
+        pieceIndex <
+        pieces.length;
+        pieceIndex += 1
+      ) {
+        const piece =
+          pieces[pieceIndex];
+
+        const candidate =
+          currentLine.length > 0
+            ? `${currentLine} ${piece}`
+            : piece;
+
+        if (
+          currentLine &&
+          font.widthOfTextAtSize(
+            candidate,
+            fontSize,
+          ) > maxWidth
+        ) {
+          lines.push(
+            currentLine,
+          );
+
+          currentLine = piece;
+        } else {
+          currentLine = candidate;
+        }
+
+        /*
+         * Long words can be split into
+         * several independent lines.
+         */
+        if (
+          pieceIndex <
+          pieces.length - 1
+        ) {
+          if (currentLine) {
+            lines.push(
+              currentLine,
+            );
+          }
+
+          currentLine = "";
+        }
+      }
+    }
+
+    if (currentLine) {
+      lines.push(
+        currentLine,
+      );
+    }
+  }
+
+  return lines.length > 0
+    ? lines
+    : [""];
 };
 
 /* =========================================
@@ -61,67 +363,134 @@ const drawWrappedText = (
   page: PDFPage,
   text: string,
   x: number,
-  y: number,
+  yTop: number,
   width: number,
+  height: number,
   font: PDFFont,
   fontSize: number,
 ) => {
-  const words =
-    text.split(/\s+/);
+  const safeWidth =
+    Math.max(1, width);
 
-  const lines: string[] = [];
+  const safeHeight =
+    Math.max(1, height);
 
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine =
-      currentLine.length > 0
-        ? `${currentLine} ${word}`
-        : word;
-
-    const testWidth =
-      font.widthOfTextAtSize(
-        testLine,
-        fontSize,
-      );
-
-    if (
-      testWidth <= width ||
-      currentLine.length === 0
-    ) {
-      currentLine =
-        testLine;
-    } else {
-      lines.push(
-        currentLine,
-      );
-
-      currentLine =
-        word;
-    }
-  }
-
-  if (currentLine) {
-    lines.push(
-      currentLine,
+  const horizontalPadding =
+    Math.min(
+      5,
+      safeWidth * 0.08,
     );
-  }
+
+  const verticalPadding =
+    Math.min(
+      4,
+      safeHeight * 0.08,
+    );
+
+  const contentWidth =
+    Math.max(
+      1,
+      safeWidth -
+        horizontalPadding * 2,
+    );
 
   const lineHeight =
-    fontSize * 1.35;
+    fontSize * 1.2;
+
+  const maxLines =
+    Math.max(
+      1,
+      Math.floor(
+        (safeHeight -
+          verticalPadding * 2) /
+          lineHeight,
+      ),
+    );
+
+  let lines = wrapText(
+    text,
+    font,
+    fontSize,
+    contentWidth,
+  );
+
+  /*
+   * Prevent text from overflowing the
+   * field vertically.
+   */
+  if (
+    lines.length >
+    maxLines
+  ) {
+    lines =
+      lines.slice(
+        0,
+        maxLines,
+      );
+
+    const lastIndex =
+      lines.length - 1;
+
+    let lastLine =
+      lines[lastIndex];
+
+    while (
+      lastLine.length > 1 &&
+      font.widthOfTextAtSize(
+        `${lastLine}…`,
+        fontSize,
+      ) > contentWidth
+    ) {
+      lastLine =
+        lastLine.slice(
+          0,
+          -1,
+        );
+    }
+
+    lines[lastIndex] =
+      `${lastLine}…`;
+  }
+
+  const totalTextHeight =
+    lines.length *
+    lineHeight;
+
+  /*
+   * Center the text vertically
+   * inside its field.
+   */
+  const firstLineBaseline =
+    yTop -
+    verticalPadding -
+    Math.max(
+      0,
+      (
+        safeHeight -
+        verticalPadding * 2 -
+        totalTextHeight
+      ) / 2,
+    ) -
+    fontSize;
 
   lines.forEach(
     (line, index) => {
       page.drawText(
         line,
         {
-          x,
+          x:
+            x +
+            horizontalPadding,
+
           y:
-            y -
+            firstLineBaseline -
             index *
               lineHeight,
+
           size: fontSize,
+
           font,
+
           color: rgb(
             0.1,
             0.1,
@@ -134,7 +503,7 @@ const drawWrappedText = (
 };
 
 /* =========================================
-   DRAW TEXT FIELD
+   TEXT FIELD
    ========================================= */
 
 const drawTextField = (
@@ -147,46 +516,35 @@ const drawTextField = (
     return;
   }
 
-  const pdfX =
-    field.x * scale;
-
-  const pdfY =
-    page.getHeight() -
-    (field.y +
-      field.height) *
-      scale;
-
-  const pdfWidth =
-    field.width * scale;
-
-  const pdfHeight =
-    field.height * scale;
+  const geometry =
+    getFieldGeometry(
+      page,
+      field,
+      scale,
+    );
 
   const fontSize =
-    Math.max(
-      8,
-      Math.min(
-        18,
-        pdfHeight * 0.48,
-      ),
+    clamp(
+      geometry.height * 0.48,
+      MIN_TEXT_FONT_SIZE,
+      MAX_TEXT_FONT_SIZE,
     );
 
   drawWrappedText(
     page,
     field.value,
-    pdfX + 5,
-    pdfY +
-      pdfHeight -
-      fontSize -
-      4,
-    pdfWidth - 10,
+    geometry.x,
+    geometry.y +
+      geometry.height,
+    geometry.width,
+    geometry.height,
     font,
     fontSize,
   );
 };
 
 /* =========================================
-   DRAW DATE FIELD
+   DATE FIELD
    ========================================= */
 
 const drawDateField = (
@@ -199,50 +557,35 @@ const drawDateField = (
     return;
   }
 
-  const pdfX =
-    field.x * scale;
-
-  const pdfY =
-    page.getHeight() -
-    (field.y +
-      field.height) *
-      scale;
-
-  const pdfHeight =
-    field.height * scale;
-
-  const fontSize =
-    Math.max(
-      8,
-      Math.min(
-        16,
-        pdfHeight * 0.45,
-      ),
+  const geometry =
+    getFieldGeometry(
+      page,
+      field,
+      scale,
     );
 
-  page.drawText(
+  const fontSize =
+    clamp(
+      geometry.height * 0.45,
+      MIN_DATE_FONT_SIZE,
+      MAX_DATE_FONT_SIZE,
+    );
+
+  drawWrappedText(
+    page,
     field.value,
-    {
-      x: pdfX + 5,
-      y:
-        pdfY +
-        (pdfHeight -
-          fontSize) /
-          2 +
-        1,
-      size: fontSize,
-      font,
-      color: rgb(
-        0.1,
-        0.1,
-        0.1,
-      ),
-    },
+    geometry.x,
+    geometry.y +
+      geometry.height,
+    geometry.width,
+    geometry.height,
+    font,
+    fontSize,
   );
 };
 
 /* =========================================
-   DRAW NAME FIELD
+   NAME FIELD
    ========================================= */
 
 const drawNameField = (
@@ -251,10 +594,6 @@ const drawNameField = (
   scale: number,
   font: PDFFont,
 ) => {
-  if (!field.value) {
-    return;
-  }
-
   drawTextField(
     page,
     field,
@@ -264,7 +603,7 @@ const drawNameField = (
 };
 
 /* =========================================
-   DRAW EMAIL FIELD
+   EMAIL FIELD
    ========================================= */
 
 const drawEmailField = (
@@ -273,10 +612,6 @@ const drawEmailField = (
   scale: number,
   font: PDFFont,
 ) => {
-  if (!field.value) {
-    return;
-  }
-
   drawTextField(
     page,
     field,
@@ -286,7 +621,7 @@ const drawEmailField = (
 };
 
 /* =========================================
-   DRAW CHECKBOX
+   CHECKBOX
    ========================================= */
 
 const drawCheckboxField = (
@@ -294,20 +629,12 @@ const drawCheckboxField = (
   field: DocumentField,
   scale: number,
 ) => {
-  const pdfX =
-    field.x * scale;
-
-  const pdfY =
-    page.getHeight() -
-    (field.y +
-      field.height) *
-      scale;
-
-  const pdfWidth =
-    field.width * scale;
-
-  const pdfHeight =
-    field.height * scale;
+  const geometry =
+    getFieldGeometry(
+      page,
+      field,
+      scale,
+    );
 
   const borderWidth =
     Math.max(
@@ -318,121 +645,136 @@ const drawCheckboxField = (
   const isChecked =
     field.value === "true";
 
-  page.drawRectangle({
-    x: pdfX,
-    y: pdfY,
-    width: pdfWidth,
-    height: pdfHeight,
-    borderWidth,
-    borderColor:
-      rgb(
-        0.1,
-        0.1,
-        0.1,
-      ),
-    color: isChecked
-      ? rgb(
+  /*
+   * Always export the checkbox itself.
+   * This means an unchecked checkbox added
+   * by the user is not silently removed.
+   */
+  page.drawRectangle(
+    {
+      x: geometry.x,
+      y: geometry.y,
+      width: geometry.width,
+      height: geometry.height,
+
+      borderWidth,
+
+      borderColor:
+        rgb(
           0.1,
           0.1,
           0.1,
-        )
-      : rgb(
+        ),
+
+      color:
+        rgb(
           1,
           1,
           1,
         ),
-  });
+    },
+  );
 
   if (!isChecked) {
     return;
   }
 
   const padding =
-    pdfWidth * 0.2;
+    Math.min(
+      geometry.width,
+      geometry.height,
+    ) * 0.2;
 
   const checkThickness =
     Math.max(
       1.5,
-      pdfWidth * 0.08,
+      Math.min(
+        geometry.width,
+        geometry.height,
+      ) * 0.08,
     );
 
   const checkColor =
     rgb(
-      1,
-      1,
-      1,
+      0.1,
+      0.1,
+      0.1,
     );
 
   /*
    * First stroke.
    */
-  page.drawLine({
-    start: {
-      x:
-        pdfX +
-        padding,
+  page.drawLine(
+    {
+      start: {
+        x:
+          geometry.x +
+          padding,
 
-      y:
-        pdfY +
-        pdfHeight *
-          0.5,
+        y:
+          geometry.y +
+          geometry.height *
+            0.48,
+      },
+
+      end: {
+        x:
+          geometry.x +
+          geometry.width *
+            0.42,
+
+        y:
+          geometry.y +
+          padding,
+      },
+
+      thickness:
+        checkThickness,
+
+      color:
+        checkColor,
     },
-
-    end: {
-      x:
-        pdfX +
-        pdfWidth *
-          0.42,
-
-      y:
-        pdfY +
-        padding,
-    },
-
-    thickness:
-      checkThickness,
-
-    color:
-      checkColor,
-  });
+  );
 
   /*
    * Second stroke.
    */
-  page.drawLine({
-    start: {
-      x:
-        pdfX +
-        pdfWidth *
-          0.42,
+  page.drawLine(
+    {
+      start: {
+        x:
+          geometry.x +
+          geometry.width *
+            0.42,
 
-      y:
-        pdfY +
-        padding,
+        y:
+          geometry.y +
+          padding,
+      },
+
+      end: {
+        x:
+          geometry.x +
+          geometry.width -
+          padding,
+
+        y:
+          geometry.y +
+          geometry.height *
+            0.78,
+      },
+
+      thickness:
+        checkThickness,
+
+      color:
+        checkColor,
     },
-
-    end: {
-      x:
-        pdfX +
-        pdfWidth -
-        padding,
-
-      y:
-        pdfY +
-        pdfHeight *
-          0.78,
-    },
-
-    thickness:
-      checkThickness,
-
-    color:
-      checkColor,
-  });
+  );
 };
 
 /* =========================================
-   DRAW SIGNATURE
+   SIGNATURE FIELD
    ========================================= */
 
 const drawSignatureField =
@@ -442,73 +784,207 @@ const drawSignatureField =
     scale: number,
     pdfDoc: PDFDocument,
   ) => {
-    if (
-      !field.signatureImage
-    ) {
-      return;
-    }
-
-    const imageBytes =
-      dataUrlToBytes(
-        field.signatureImage,
+    const geometry =
+      getFieldGeometry(
+        page,
+        field,
+        scale,
       );
 
-    let image;
-
     /*
-     * SignatureField currently
-     * stores the drawn signature
-     * as PNG data.
-     *
-     * Try PNG first.
+     * DRAWN OR UPLOADED SIGNATURE
      */
-    try {
-      image =
-        await pdfDoc.embedPng(
-          imageBytes,
-        );
-    } catch {
-      /*
-       * Fall back to JPG in case
-       * an uploaded signature is
-       * stored as JPEG.
-       */
+    if (field.signatureImage) {
       try {
-        image =
-          await pdfDoc.embedJpg(
-            imageBytes,
+        const imageBytes =
+          dataUrlToBytes(
+            field.signatureImage,
           );
-      } catch {
-        console.error(
-          "Unable to embed signature image.",
+
+        let image;
+
+        /*
+         * Drawn signatures are normally PNG.
+         * Uploaded signatures may be JPG.
+         */
+        try {
+          image =
+            await pdfDoc.embedPng(
+              imageBytes,
+            );
+        } catch {
+          image =
+            await pdfDoc.embedJpg(
+              imageBytes,
+            );
+        }
+
+        const imageWidth =
+          image.width;
+
+        const imageHeight =
+          image.height;
+
+        if (
+          imageWidth <= 0 ||
+          imageHeight <= 0
+        ) {
+          return;
+        }
+
+        /*
+         * Preserve the original signature
+         * aspect ratio.
+         */
+        const imageScale =
+          Math.min(
+            geometry.width /
+              imageWidth,
+
+            geometry.height /
+              imageHeight,
+          );
+
+        const renderedWidth =
+          imageWidth *
+          imageScale;
+
+        const renderedHeight =
+          imageHeight *
+          imageScale;
+
+        page.drawImage(
+          image,
+          {
+            x:
+              geometry.x +
+              (
+                geometry.width -
+                renderedWidth
+              ) / 2,
+
+            y:
+              geometry.y +
+              (
+                geometry.height -
+                renderedHeight
+              ) / 2,
+
+            width:
+              renderedWidth,
+
+            height:
+              renderedHeight,
+          },
         );
 
         return;
+      } catch (error) {
+        console.error(
+          "Unable to embed signature image.",
+          error,
+        );
       }
     }
 
-    const pdfX =
-      field.x * scale;
+    /*
+     * TYPED SIGNATURE
+     *
+     * Typed signatures use field.value.
+     * They must not disappear simply because
+     * signatureImage is empty.
+     */
+    if (!field.value) {
+      return;
+    }
 
-    const pdfY =
-      page.getHeight() -
-      (field.y +
-        field.height) *
-        scale;
+    /*
+     * The browser font selected inside the
+     * editor cannot safely be assumed to exist
+     * inside the exported PDF.
+     *
+     * Helvetica Oblique is therefore used as
+     * a reliable PDF fallback.
+     */
+    const typedSignatureFont =
+      await pdfDoc.embedFont(
+        StandardFonts.HelveticaOblique,
+      );
 
-    const pdfWidth =
-      field.width * scale;
+    const initialFontSize =
+      clamp(
+        geometry.height * 0.7,
+        14,
+        Math.min(
+          42,
+          geometry.height * 0.85,
+        ),
+      );
 
-    const pdfHeight =
-      field.height * scale;
+    const availableWidth =
+      Math.max(
+        1,
+        geometry.width - 10,
+      );
 
-    page.drawImage(
-      image,
+    let fittedFontSize =
+      initialFontSize;
+
+    /*
+     * Reduce the font until the complete
+     * typed signature fits inside its field.
+     */
+    while (
+      fittedFontSize > 10 &&
+      typedSignatureFont.widthOfTextAtSize(
+        field.value,
+        fittedFontSize,
+      ) >
+        availableWidth
+    ) {
+      fittedFontSize -= 1;
+    }
+
+    const textWidth =
+      typedSignatureFont.widthOfTextAtSize(
+        field.value,
+        fittedFontSize,
+      );
+
+    page.drawText(
+      field.value,
       {
-        x: pdfX,
-        y: pdfY,
-        width: pdfWidth,
-        height: pdfHeight,
+        x:
+          geometry.x +
+          Math.max(
+            5,
+            (
+              geometry.width -
+              textWidth
+            ) / 2,
+          ),
+
+        y:
+          geometry.y +
+          (
+            geometry.height -
+            fittedFontSize
+          ) / 2 +
+          fittedFontSize *
+            0.18,
+
+        size:
+          fittedFontSize,
+
+        font:
+          typedSignatureFont,
+
+        color:
+          rgb(
+            0.05,
+            0.05,
+            0.05,
+          ),
       },
     );
   };
@@ -521,6 +997,30 @@ export async function exportPdf({
   file,
   fields,
 }: ExportPdfOptions): Promise<Uint8Array> {
+  if (!file) {
+    throw new Error(
+      "No PDF document was provided.",
+    );
+  }
+
+  /*
+   * Check both MIME type and extension
+   * because some browsers do not always
+   * provide the MIME type consistently.
+   */
+  const isPdf =
+    file.type ===
+      "application/pdf" ||
+    /\.pdf$/i.test(
+      file.name,
+    );
+
+  if (!isPdf) {
+    throw new Error(
+      "Please select a valid PDF document.",
+    );
+  }
+
   const fileBytes =
     await file.arrayBuffer();
 
@@ -537,19 +1037,37 @@ export async function exportPdf({
   const pages =
     pdfDoc.getPages();
 
+  if (pages.length === 0) {
+    throw new Error(
+      "The PDF does not contain any pages.",
+    );
+  }
+
   /*
-   * Render every field onto
-   * its corresponding PDF page.
+   * Render every field onto its actual
+   * corresponding PDF page.
    */
   for (
     const field of fields
   ) {
+    const rawPage =
+      safeNumber(
+        field.page,
+        1,
+      );
+
+    const pageNumber =
+      Math.trunc(
+        rawPage,
+      );
+
     const pageIndex =
-      field.page - 1;
+      pageNumber - 1;
 
     if (
       pageIndex < 0 ||
-      pageIndex >= pages.length
+      pageIndex >=
+        pages.length
     ) {
       continue;
     }
@@ -558,14 +1076,17 @@ export async function exportPdf({
       pages[pageIndex];
 
     /*
-     * React-PDF displays the page
-     * at 820px wide.
+     * The editor stores coordinates against
+     * an internal 820px page width.
      *
-     * Convert editor coordinates
-     * into native PDF coordinates.
+     * Convert those coordinates into the
+     * actual PDF page coordinate system.
      */
+    const pageWidth =
+      page.getWidth();
+
     const scale =
-      page.getWidth() /
+      pageWidth /
       EDITOR_PAGE_WIDTH;
 
     switch (
@@ -641,19 +1162,20 @@ export async function downloadExportedPdf(
   fields: DocumentField[],
 ): Promise<void> {
   const pdfBytes =
-    await exportPdf({
-      file,
-      fields,
-    });
+    await exportPdf(
+      {
+        file,
+        fields,
+      },
+    );
 
   /*
-   * Convert the Uint8Array into a
-   * guaranteed ArrayBuffer.
+   * Convert Uint8Array into a standalone
+   * ArrayBuffer.
    *
-   * This avoids the TypeScript error:
-   *
-   * Uint8Array<ArrayBufferLike>
-   * is not assignable to BlobPart.
+   * This avoids strict TypeScript BlobPart
+   * compatibility problems involving
+   * Uint8Array<ArrayBufferLike>.
    */
   const pdfBuffer =
     new ArrayBuffer(
@@ -668,7 +1190,8 @@ export async function downloadExportedPdf(
     new Blob(
       [pdfBuffer],
       {
-        type: "application/pdf",
+        type:
+          "application/pdf",
       },
     );
 
@@ -693,6 +1216,9 @@ export async function downloadExportedPdf(
   anchor.download =
     `${originalName}-signed.pdf`;
 
+  anchor.style.display =
+    "none";
+
   document.body.appendChild(
     anchor,
   );
@@ -701,7 +1227,17 @@ export async function downloadExportedPdf(
 
   anchor.remove();
 
-  URL.revokeObjectURL(
-    url,
+  /*
+   * Release the object URL after the
+   * browser has had a chance to start
+   * the download.
+   */
+  window.setTimeout(
+    () => {
+      URL.revokeObjectURL(
+        url,
+      );
+    },
+    0,
   );
 }

@@ -16,14 +16,19 @@ const DOCUMENT_WIDTH = 820;
 const MIN_DOCUMENT_HEIGHT = 1120;
 
 /*
- * DOCX uses twips.
+ * DOCX page dimensions are expressed in twips.
  *
- * We keep the exported page at the same
- * aspect ratio as the SignFlow document
- * canvas instead of forcing the captured
- * image into a different page ratio.
+ * 1 CSS pixel at 96 DPI is 15 twips.
+ *
+ * The page and the captured image use the
+ * same conversion, so the exported document
+ * preserves the exact SignFlow aspect ratio.
  */
-const TWIPS_PER_PIXEL = 14.52;
+const TWIPS_PER_PIXEL = 15;
+
+/* =========================================
+   DOCUMENT HEIGHT
+   ========================================= */
 
 const getDocumentHeight = (
   element: HTMLElement,
@@ -31,6 +36,7 @@ const getDocumentHeight = (
   const height = Math.max(
     element.scrollHeight,
     element.offsetHeight,
+    element.clientHeight,
     MIN_DOCUMENT_HEIGHT,
   );
 
@@ -40,15 +46,21 @@ const getDocumentHeight = (
   );
 };
 
+/* =========================================
+   DOWNLOAD
+   ========================================= */
+
 const downloadBlob = (
   blob: Blob,
   fileName: string,
-) => {
+): void => {
   const url =
     URL.createObjectURL(blob);
 
   const downloadLink =
-    window.document.createElement("a");
+    window.document.createElement(
+      "a",
+    );
 
   downloadLink.href = url;
 
@@ -59,6 +71,9 @@ const downloadBlob = (
       ? fileName
       : `${fileName}.docx`;
 
+  downloadLink.style.display =
+    "none";
+
   window.document.body.appendChild(
     downloadLink,
   );
@@ -67,10 +82,299 @@ const downloadBlob = (
 
   downloadLink.remove();
 
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
+  /*
+   * Give the browser enough time to begin
+   * the download before releasing the URL.
+   */
+  window.setTimeout(
+    () => {
+      URL.revokeObjectURL(url);
+    },
+    1000,
+  );
 };
+
+/* =========================================
+   HIDE EDITOR CONTROLS
+   ========================================= */
+
+const hideEditorControls = (
+  clonedDocument: globalThis.Document,
+): void => {
+  /*
+   * Controls used by the SignFlow editor
+   * must never become part of the exported
+   * document.
+   */
+  const controls =
+    clonedDocument.querySelectorAll(
+      [
+        ".field-delete",
+        ".resize-handle",
+        ".field-resize-handle",
+        ".field-resize-right",
+        ".field-resize-bottom",
+        ".field-resize-corner",
+        ".field-drag-handle",
+      ].join(","),
+    );
+
+  controls.forEach(
+    (control) => {
+      const element =
+        control as HTMLElement;
+
+      element.style.display =
+        "none";
+    },
+  );
+
+  /*
+   * Some field implementations use buttons
+   * for delete or other editor actions.
+   */
+  const buttons =
+    clonedDocument.querySelectorAll(
+      [
+        ".document-field button",
+        ".signature-field button",
+        ".date-field button",
+        ".checkbox-field button",
+        ".name-field button",
+        ".email-field button",
+      ].join(","),
+    );
+
+  buttons.forEach(
+    (button) => {
+      const element =
+        button as HTMLElement;
+
+      element.style.display =
+        "none";
+    },
+  );
+};
+
+/* =========================================
+   REMOVE EDITOR SELECTION
+   ========================================= */
+
+const removeEditorSelection = (
+  clonedDocument: globalThis.Document,
+): void => {
+  const selectedElements =
+    clonedDocument.querySelectorAll(
+      [
+        ".field-selected",
+        ".selected-field",
+        ".document-field-selected",
+        ".signature-field-selected",
+        ".date-field-selected",
+        ".checkbox-field-selected",
+        ".name-field-selected",
+        ".email-field-selected",
+      ].join(","),
+    );
+
+  selectedElements.forEach(
+    (item) => {
+      const element =
+        item as HTMLElement;
+
+      element.classList.remove(
+        "field-selected",
+        "selected-field",
+        "document-field-selected",
+        "signature-field-selected",
+        "date-field-selected",
+        "checkbox-field-selected",
+        "name-field-selected",
+        "email-field-selected",
+      );
+    },
+  );
+};
+
+/* =========================================
+   PREPARE CLONED DOCUMENT
+   ========================================= */
+
+const prepareClonedDocument = (
+  clonedDocument: globalThis.Document,
+  documentHeight: number,
+): void => {
+  /*
+   * The live DOCX viewer can be visually
+   * scaled on smaller screens using CSS
+   * transform.
+   *
+   * Export must use the original internal
+   * 820px coordinate system instead.
+   */
+  const clonedPage =
+    clonedDocument.querySelector(
+      ".docx-page",
+    ) as HTMLElement | null;
+
+  if (clonedPage) {
+    clonedPage.style.transform =
+      "none";
+
+    clonedPage.style.transformOrigin =
+      "top left";
+
+    clonedPage.style.position =
+      "relative";
+
+    clonedPage.style.top =
+      "0";
+
+    clonedPage.style.left =
+      "0";
+
+    clonedPage.style.width =
+      `${DOCUMENT_WIDTH}px`;
+
+    clonedPage.style.minWidth =
+      `${DOCUMENT_WIDTH}px`;
+
+    clonedPage.style.maxWidth =
+      `${DOCUMENT_WIDTH}px`;
+
+    clonedPage.style.height =
+      `${documentHeight}px`;
+
+    clonedPage.style.minHeight =
+      `${documentHeight}px`;
+
+    clonedPage.style.maxHeight =
+      `${documentHeight}px`;
+
+    clonedPage.style.margin =
+      "0";
+
+    clonedPage.style.padding =
+      "0";
+
+    clonedPage.style.overflow =
+      "visible";
+
+    clonedPage.style.boxSizing =
+      "border-box";
+  }
+
+  /*
+   * The viewer wrapper may also carry a
+   * responsive transform. Remove it so the
+   * screenshot is taken at full internal size.
+   */
+  const visualFrames =
+    clonedDocument.querySelectorAll(
+      ".docx-document > div",
+    );
+
+  visualFrames.forEach(
+    (frame) => {
+      const htmlFrame =
+        frame as HTMLElement;
+
+      htmlFrame.style.transform =
+        "none";
+
+      htmlFrame.style.transformOrigin =
+        "top left";
+
+      htmlFrame.style.width =
+        `${DOCUMENT_WIDTH}px`;
+
+      htmlFrame.style.maxWidth =
+        `${DOCUMENT_WIDTH}px`;
+
+      htmlFrame.style.minWidth =
+        `${DOCUMENT_WIDTH}px`;
+
+      htmlFrame.style.overflow =
+        "visible";
+    },
+  );
+
+  /*
+   * Hide editor only controls.
+   *
+   * The actual fields remain visible,
+   * including their values, signatures
+   * and checkbox state.
+   */
+  hideEditorControls(
+    clonedDocument,
+  );
+
+  removeEditorSelection(
+    clonedDocument,
+  );
+};
+
+/* =========================================
+   CONVERT DATA URL TO BYTES
+   ========================================= */
+
+const dataUrlToBytes = (
+  dataUrl: string,
+): Uint8Array => {
+  const commaIndex =
+    dataUrl.indexOf(",");
+
+  if (commaIndex === -1) {
+    throw new Error(
+      "Unable to prepare the document image for export.",
+    );
+  }
+
+  const base64 =
+    dataUrl
+      .slice(
+        commaIndex + 1,
+      )
+      .replace(/\s/g, "");
+
+  if (!base64) {
+    throw new Error(
+      "Unable to prepare the document image for export.",
+    );
+  }
+
+  try {
+    const binary =
+      window.atob(base64);
+
+    const imageBytes =
+      new Uint8Array(
+        binary.length,
+      );
+
+    for (
+      let index = 0;
+      index < binary.length;
+      index += 1
+    ) {
+      imageBytes[index] =
+        binary.charCodeAt(
+          index,
+        );
+    }
+
+    return imageBytes;
+  } catch {
+    throw new Error(
+      "Unable to decode the exported document image.",
+    );
+  }
+};
+
+/* =========================================
+   EXPORT DOCX
+   ========================================= */
 
 export async function downloadExportedDocx({
   element,
@@ -82,22 +386,32 @@ export async function downloadExportedDocx({
     );
   }
 
-  /*
-   * IMPORTANT:
-   *
-   * SignFlow visually scales the DOCX page
-   * on smaller devices using CSS transform.
-   *
-   * We must NOT export that visual scale.
-   *
-   * Instead, html2canvas captures the page
-   * in its fixed 820px internal coordinate
-   * system. This makes the exported result
-   * independent of the device used for editing.
-   */
   const documentHeight =
-    getDocumentHeight(element);
+    getDocumentHeight(
+      element,
+    );
 
+  /*
+   * Capture the actual rendered SignFlow
+   * document.
+   *
+   * This is intentional: the DOCX export
+   * is a visual snapshot of the editor.
+   *
+   * Therefore all fields already rendered
+   * by the editor are included:
+   *
+   * text
+   * name
+   * email
+   * date
+   * checkbox
+   * drawn signature
+   * typed signature
+   * uploaded signature
+   * field positions
+   * field sizes
+   */
   const canvas =
     await html2canvas(
       element,
@@ -111,6 +425,11 @@ export async function downloadExportedDocx({
         height:
           documentHeight,
 
+        /*
+         * Render at 2x for better output
+         * quality while retaining the same
+         * document coordinate system.
+         */
         scale: 2,
 
         useCORS: true,
@@ -122,180 +441,45 @@ export async function downloadExportedDocx({
         onclone: (
           clonedDocument,
         ) => {
-          /*
-           * Remove the responsive visual
-           * transform from the cloned page.
-           *
-           * The live editor may currently be
-           * scaled to 40%, 60%, etc. on mobile.
-           * Export must always use the internal
-           * 820px document coordinates.
-           */
-          const clonedPage =
-            clonedDocument.querySelector(
-              ".docx-page",
-            ) as HTMLElement | null;
-
-          if (clonedPage) {
-            clonedPage.style.transform =
-              "none";
-
-            clonedPage.style.transformOrigin =
-              "top left";
-
-            clonedPage.style.position =
-              "relative";
-
-            clonedPage.style.top =
-              "0";
-
-            clonedPage.style.left =
-              "0";
-
-            clonedPage.style.width =
-              `${DOCUMENT_WIDTH}px`;
-
-            clonedPage.style.minWidth =
-              `${DOCUMENT_WIDTH}px`;
-
-            clonedPage.style.maxWidth =
-              `${DOCUMENT_WIDTH}px`;
-
-            clonedPage.style.minHeight =
-              `${documentHeight}px`;
-
-            clonedPage.style.height =
-              `${documentHeight}px`;
-
-            clonedPage.style.margin =
-              "0";
-
-            clonedPage.style.overflow =
-              "visible";
-          }
-
-          /*
-           * Hide the visual editor frame.
-           * The exported page should start
-           * directly at the document itself.
-           */
-          const visualFrames =
-            clonedDocument.querySelectorAll(
-              ".docx-document > div",
-            );
-
-          visualFrames.forEach(
-            (frame) => {
-              const htmlFrame =
-                frame as HTMLElement;
-
-              htmlFrame.style.transform =
-                "none";
-            },
-          );
-
-          /*
-           * Remove editor-only controls.
-           */
-          const controls =
-            clonedDocument.querySelectorAll(
-              [
-                ".field-delete",
-                ".resize-handle",
-                ".resize-handle-right",
-                ".resize-handle-bottom",
-                ".resize-handle-corner",
-                ".field-drag-handle",
-              ].join(","),
-            );
-
-          controls.forEach(
-            (control) => {
-              (
-                control as HTMLElement
-              ).style.display =
-                "none";
-            },
-          );
-
-          /*
-           * Hide buttons inside fields.
-           */
-          const buttons =
-            clonedDocument.querySelectorAll(
-              ".document-field button",
-            );
-
-          buttons.forEach(
-            (button) => {
-              (
-                button as HTMLElement
-              ).style.display =
-                "none";
-            },
-          );
-
-          /*
-           * Remove editor selection
-           * indicators.
-           */
-          const selectedElements =
-            clonedDocument.querySelectorAll(
-              ".field-selected, .selected-field",
-            );
-
-          selectedElements.forEach(
-            (item) => {
-              (
-                item as HTMLElement
-              ).classList.remove(
-                "field-selected",
-                "selected-field",
-              );
-            },
+          prepareClonedDocument(
+            clonedDocument,
+            documentHeight,
           );
         },
       },
     );
 
+  if (
+    canvas.width <= 0 ||
+    canvas.height <= 0
+  ) {
+    throw new Error(
+      "Unable to capture the DOCX document for export.",
+    );
+  }
+
   /*
-   * Convert the captured page to PNG.
+   * Convert the captured document into
+   * a PNG image.
+   *
+   * PNG preserves signatures, text,
+   * checkboxes and transparent signature
+   * details better than JPEG.
    */
   const imageData =
     canvas.toDataURL(
       "image/png",
     );
 
-  const base64 =
-    imageData.split(",")[1];
-
-  if (!base64) {
-    throw new Error(
-      "Unable to prepare the document image for export.",
-    );
-  }
-
-  const binary =
-    window.atob(base64);
-
   const imageBytes =
-    new Uint8Array(
-      binary.length,
+    dataUrlToBytes(
+      imageData,
     );
-
-  for (
-    let index = 0;
-    index < binary.length;
-    index += 1
-  ) {
-    imageBytes[index] =
-      binary.charCodeAt(index);
-  }
 
   /*
-   * Keep the DOCX page and image at
-   * exactly the same aspect ratio as
-   * the captured SignFlow page.
+   * Keep the DOCX page at the same
+   * aspect ratio as the captured
+   * SignFlow document.
    */
   const pageWidthTwips =
     Math.round(
@@ -309,12 +493,15 @@ export async function downloadExportedDocx({
         TWIPS_PER_PIXEL,
     );
 
-  const imageWidthTwips =
-    pageWidthTwips;
-
-  const imageHeightTwips =
-    pageHeightTwips;
-
+  /*
+   * ImageRun dimensions are expressed
+   * using the captured document's logical
+   * CSS pixel dimensions.
+   *
+   * Do not use canvas.width/canvas.height
+   * here because html2canvas scale=2 only
+   * controls raster quality.
+   */
   const imageParagraph =
     new Paragraph({
       children: [
@@ -325,14 +512,10 @@ export async function downloadExportedDocx({
 
           transformation: {
             width:
-              Math.round(
-                DOCUMENT_WIDTH,
-              ),
+              DOCUMENT_WIDTH,
 
             height:
-              Math.round(
-                documentHeight,
-              ),
+              documentHeight,
           },
         }),
       ],
@@ -342,15 +525,21 @@ export async function downloadExportedDocx({
         after: 0,
         line: 240,
       },
+
+      indent: {
+        left: 0,
+        right: 0,
+        firstLine: 0,
+      },
     });
 
   /*
-   * Create a page whose dimensions
-   * match the captured document.
+   * Create a borderless DOCX page whose
+   * dimensions match the captured page.
    *
-   * This prevents the previous
-   * 620x847 image from being stretched
-   * into a different page ratio.
+   * This prevents Word from stretching
+   * the SignFlow document into a standard
+   * paper size.
    */
   const exportedDocument =
     new Document({
@@ -371,6 +560,9 @@ export async function downloadExportedDocx({
                 right: 0,
                 bottom: 0,
                 left: 0,
+                header: 0,
+                footer: 0,
+                gutter: 0,
               },
             },
           },
@@ -387,13 +579,14 @@ export async function downloadExportedDocx({
       exportedDocument,
     );
 
-  /*
-   * Keep these values referenced so
-   * the intended one-to-one page/image
-   * relationship remains explicit.
-   */
-  void imageWidthTwips;
-  void imageHeightTwips;
+  if (
+    !blob ||
+    blob.size <= 0
+  ) {
+    throw new Error(
+      "The browser could not create the exported DOCX document.",
+    );
+  }
 
   downloadBlob(
     blob,

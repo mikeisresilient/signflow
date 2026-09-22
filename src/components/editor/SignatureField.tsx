@@ -1084,7 +1084,9 @@ export default function SignatureField({
           MIN_HEIGHT,
           field.height,
         ),
-        touchAction: "auto",
+        touchAction: "none",
+        overflow: "visible",
+        boxSizing: "border-box",
       }}
       onPointerDown={
         handleDragStart
@@ -1191,18 +1193,20 @@ export default function SignatureField({
             />
           </label>
 
-          <button
-            type="button"
-            className="field-delete signature-delete-button"
-            onClick={
-              handleDelete
-            }
-            aria-label="Delete signature"
-            title="Delete signature"
-          >
-            ×
-          </button>
+
         </div>
+      )}
+
+      {selected && (
+        <button
+          type="button"
+          className="field-delete signature-delete-button"
+          onClick={handleDelete}
+          aria-label="Delete signature"
+          title="Delete signature"
+        >
+          ×
+        </button>
       )}
 
       {mode === "draw" && (

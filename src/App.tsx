@@ -1,4 +1,11 @@
-import { useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentType,
+} from "react";
 
 import {
   ArrowLeft,
@@ -55,10 +62,8 @@ type Tool =
 
 interface ToolItem {
   id: Tool;
-
   label: string;
-
-  icon: React.ComponentType<{
+  icon: ComponentType<{
     size?: number;
   }>;
 }
@@ -102,42 +107,74 @@ const tools: ToolItem[] = [
 ];
 
 /* =========================================
+   SAVE DATA
+   ========================================= */
+
+interface SavedDocumentState {
+  fileName: string;
+  fileSize: number;
+  lastModified: number;
+  fields: DocumentField[];
+  savedAt: number;
+}
+
+const SAVE_STORAGE_PREFIX =
+  "signflow-document:";
+
+const getStorageKey = (
+  selectedFile: File,
+): string => {
+  return `${SAVE_STORAGE_PREFIX}${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}`;
+};
+
+const cloneFields = (
+  source: DocumentField[],
+): DocumentField[] => {
+  return source.map(
+    (field) => ({
+      ...field,
+    }),
+  );
+};
+
+/* =========================================
+   CONSTANTS
+   ========================================= */
+
+const MIN_ZOOM = 50;
+const MAX_ZOOM = 150;
+const ZOOM_STEP = 10;
+
+/* =========================================
    APP
    ========================================= */
 
 function App() {
-  /*
-   * Uploaded document.
-   */
-  const [file, setFile] =
-    useState<File | null>(
-      null,
-    );
+  /* =========================================
+     DOCUMENT
+     ========================================= */
 
-  /*
-   * Currently selected tool.
-   */
+  const [file, setFile] =
+    useState<File | null>(null);
+
+  /* =========================================
+     TOOL
+     ========================================= */
+
   const [tool, setTool] =
     useState<Tool>(
       "select",
     );
 
-  /*
-   * All fields placed on
-   * the document.
-   */
+  /* =========================================
+     FIELDS
+     ========================================= */
+
   const [fields, setFields] =
     useState<DocumentField[]>(
       [],
     );
 
-  /*
-   * Actual rendered DOCX page.
-   *
-   * The DOCX exporter captures
-   * this element so the exported
-   * document matches the editor.
-   */
   const [
     docxDocumentElement,
     setDocxDocumentElement,
@@ -146,9 +183,6 @@ function App() {
       null,
     );
 
-  /*
-   * Currently selected field.
-   */
   const [
     selectedFieldId,
     setSelectedFieldId,
@@ -157,9 +191,10 @@ function App() {
       null,
     );
 
-  /*
-   * Export state.
-   */
+  /* =========================================
+     EXPORT
+     ========================================= */
+
   const [
     isExporting,
     setIsExporting,
@@ -167,30 +202,286 @@ function App() {
     useState(false);
 
   /* =========================================
+     UNDO / REDO
+     ========================================= */
+
+  const [
+    past,
+    setPast,
+  ] =
+    useState<DocumentField[][]>(
+      [],
+    );
+
+  const [
+    future,
+    setFuture,
+  ] =
+    useState<DocumentField[][]>(
+      [],
+    );
+
+  const pastRef =
+    useRef<DocumentField[][]>(
+      [],
+    );
+
+  const futureRef =
+    useRef<DocumentField[][]>(
+      [],
+    );
+
+  /* =========================================
+     SAVE STATE
+     ========================================= */
+
+  const [
+    isSaved,
+    setIsSaved,
+  ] =
+    useState(false);
+
+  /* =========================================
+     ZOOM
+     ========================================= */
+
+  const [
+    zoom,
+    setZoom,
+  ] =
+    useState(100);
+
+  /* =========================================
+     FIELD REFERENCE
+     ========================================= */
+
+  const fieldsRef =
+    useRef<DocumentField[]>(
+      [],
+    );
+
+  const historySnapshotRef =
+    useRef<DocumentField[] | null>(
+      null,
+    );
+
+  const historyTimerRef =
+    useRef<number | null>(
+      null,
+    );
+
+  const documentSessionRef =
+    useRef(0);
+
+  /* =========================================
+     FIELD REF SYNCHRONIZATION
+     ========================================= */
+
+  useEffect(() => {
+    fieldsRef.current =
+      fields;
+  }, [fields]);
+
+  /* =========================================
+     HISTORY CLEANUP
+     ========================================= */
+
+  useEffect(() => {
+    return () => {
+      if (
+        historyTimerRef.current !==
+        null
+      ) {
+        window.clearTimeout(
+          historyTimerRef.current,
+        );
+
+        historyTimerRef.current =
+          null;
+      }
+    };
+  }, []);
+
+  /* =========================================
      FILE TYPE
      ========================================= */
 
   const isPdf =
     file?.type ===
-    "application/pdf";
+      "application/pdf" ||
+    Boolean(
+      file?.name
+        .toLowerCase()
+        .endsWith(".pdf"),
+    );
 
   const isImage =
     file?.type ===
       "image/png" ||
     file?.type ===
-      "image/jpeg";
+      "image/jpeg" ||
+    Boolean(
+      file?.name
+        .toLowerCase()
+        .match(
+          /\.(png|jpe?g)$/i,
+        ),
+    );
 
   const isDocx =
-    file?.name
-      .toLowerCase()
-      .endsWith(".docx");
+    Boolean(
+      file?.name
+        .toLowerCase()
+        .endsWith(".docx"),
+    );
+
+  /* =========================================
+     HISTORY HELPERS
+     ========================================= */
+
+  const clearHistoryTimer =
+    useCallback(() => {
+      if (
+        historyTimerRef.current !==
+        null
+      ) {
+        window.clearTimeout(
+          historyTimerRef.current,
+        );
+
+        historyTimerRef.current =
+          null;
+      }
+    }, []);
+
+  const pushPastSnapshot =
+    useCallback(
+      (
+        snapshot: DocumentField[],
+      ) => {
+        const cloned =
+          cloneFields(
+            snapshot,
+          );
+
+        const nextPast = [
+          ...pastRef.current,
+          cloned,
+        ];
+
+        pastRef.current =
+          nextPast;
+
+        setPast(
+          nextPast,
+        );
+      },
+      [],
+    );
+
+  const clearFuture =
+    useCallback(() => {
+      futureRef.current =
+        [];
+
+      setFuture([]);
+    }, []);
+
+  const flushPendingHistory =
+    useCallback(() => {
+      clearHistoryTimer();
+
+      const pending =
+        historySnapshotRef.current;
+
+      if (!pending) {
+        return;
+      }
+
+      pushPastSnapshot(
+        pending,
+      );
+
+      historySnapshotRef.current =
+        null;
+    }, [
+      clearHistoryTimer,
+      pushPastSnapshot,
+    ]);
+
+  const beginHistoryTransaction =
+    useCallback(() => {
+      if (
+        historySnapshotRef.current ===
+        null
+      ) {
+        historySnapshotRef.current =
+          cloneFields(
+            fieldsRef.current,
+          );
+      }
+
+      clearHistoryTimer();
+
+      const currentSession =
+        documentSessionRef.current;
+
+      historyTimerRef.current =
+        window.setTimeout(() => {
+          if (
+            currentSession !==
+            documentSessionRef.current
+          ) {
+            return;
+          }
+
+          flushPendingHistory();
+        }, 350);
+    }, [
+      clearHistoryTimer,
+      flushPendingHistory,
+    ]);
+
+  const commitFieldState =
+    useCallback(
+      (
+        nextFields: DocumentField[],
+      ) => {
+        const previous =
+          fieldsRef.current;
+
+        pushPastSnapshot(
+          previous,
+        );
+
+        clearFuture();
+
+        const cloned =
+          cloneFields(
+            nextFields,
+          );
+
+        fieldsRef.current =
+          cloned;
+
+        setFields(
+          cloned,
+        );
+
+        setIsSaved(false);
+      },
+      [
+        pushPastSnapshot,
+        clearFuture,
+      ],
+    );
 
   /* =========================================
      UPLOAD DOCUMENT
      ========================================= */
 
   const handleUpload = (
-    event: React.ChangeEvent<HTMLInputElement>,
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
     const selectedFile =
       event.target.files?.[0];
@@ -199,15 +490,69 @@ function App() {
       return;
     }
 
+    documentSessionRef.current +=
+      1;
+
+    clearHistoryTimer();
+
+    historySnapshotRef.current =
+      null;
+
     setFile(
       selectedFile,
     );
 
-    /*
-     * Reset editor state when
-     * opening a new document.
-     */
-    setFields([]);
+    let restoredFields:
+      DocumentField[] = [];
+
+    try {
+      const saved =
+        window.localStorage.getItem(
+          getStorageKey(
+            selectedFile,
+          ),
+        );
+
+      if (saved) {
+        const parsed =
+          JSON.parse(
+            saved,
+          ) as SavedDocumentState;
+
+        if (
+          Array.isArray(
+            parsed.fields,
+          )
+        ) {
+          restoredFields =
+            cloneFields(
+              parsed.fields,
+            );
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "Unable to restore saved SignFlow state.",
+        error,
+      );
+    }
+
+    fieldsRef.current =
+      restoredFields;
+
+    setFields(
+      restoredFields,
+    );
+
+    pastRef.current =
+      [];
+
+    futureRef.current =
+      [];
+
+    setPast([]);
+
+    setFuture([]);
 
     setDocxDocumentElement(
       null,
@@ -217,12 +562,16 @@ function App() {
       null,
     );
 
-    setTool("select");
+    setTool(
+      "select",
+    );
 
-    /*
-     * Allow the same file to be
-     * selected again later.
-     */
+    setZoom(100);
+
+    setIsSaved(
+      restoredFields.length > 0,
+    );
+
     event.target.value = "";
   };
 
@@ -278,19 +627,11 @@ function App() {
         "0",
       )}`;
 
-    /*
-     * All field positions are stored in a
-     * document coordinate system.
-     *
-     * PDF uses the fixed 820px editor width.
-     * Image fields use original image pixels.
-     * DOCX uses its fixed 820px page width.
-     *
-     * The viewer converts screen coordinates
-     * into these coordinates before calling
-     * this function. */
     const safeScale =
-      Number.isFinite(scale) && scale > 0
+      Number.isFinite(
+        scale,
+      ) &&
+      scale > 0
         ? scale
         : 1;
 
@@ -368,18 +709,18 @@ function App() {
         : {}),
     };
 
-    setFields(
-      (currentFields) => [
-        ...currentFields,
-        newField,
-      ],
-    );
+    commitFieldState([
+      ...fieldsRef.current,
+      newField,
+    ]);
 
     setSelectedFieldId(
       newField.id,
     );
 
-    setTool("select");
+    setTool(
+      "select",
+    );
   };
 
   /* =========================================
@@ -390,24 +731,49 @@ function App() {
     id: string,
     updates: Partial<DocumentField>,
   ) => {
-    setFields(
-      (currentFields) =>
-        currentFields.map(
-          (field) => {
-            if (
-              field.id !==
-              id
-            ) {
-              return field;
-            }
+    beginHistoryTransaction();
 
-            return {
-              ...field,
-              ...updates,
-            };
-          },
-        ),
+    const nextFields =
+      fieldsRef.current.map(
+        (field) => {
+          if (
+            field.id !== id
+          ) {
+            return field;
+          }
+
+          return {
+            ...field,
+            ...updates,
+          };
+        },
+      );
+
+    fieldsRef.current =
+      nextFields;
+
+    setFields(
+      nextFields,
     );
+
+    setIsSaved(false);
+
+    clearHistoryTimer();
+
+    const currentSession =
+      documentSessionRef.current;
+
+    historyTimerRef.current =
+      window.setTimeout(() => {
+        if (
+          currentSession !==
+          documentSessionRef.current
+        ) {
+          return;
+        }
+
+        flushPendingHistory();
+      }, 350);
   };
 
   /* =========================================
@@ -421,12 +787,9 @@ function App() {
       id,
     );
 
-    /*
-     * Selecting an existing
-     * field always returns to
-     * selection mode.
-     */
-    setTool("select");
+    setTool(
+      "select",
+    );
   };
 
   /* =========================================
@@ -436,31 +799,300 @@ function App() {
   const deleteField = (
     id: string,
   ) => {
-    setFields(
-      (currentFields) =>
-        currentFields.filter(
-          (field) =>
-            field.id !== id,
-        ),
+    const fieldExists =
+      fieldsRef.current.some(
+        (field) =>
+          field.id === id,
+      );
+
+    if (!fieldExists) {
+      return;
+    }
+
+    clearHistoryTimer();
+
+    historySnapshotRef.current =
+      null;
+
+    commitFieldState(
+      fieldsRef.current.filter(
+        (field) =>
+          field.id !== id,
+      ),
     );
 
     setSelectedFieldId(
       (currentSelected) =>
-        currentSelected ===
-        id
+        currentSelected === id
           ? null
           : currentSelected,
     );
   };
 
   /* =========================================
+     UNDO
+     ========================================= */
+
+  const handleUndo = () => {
+    flushPendingHistory();
+
+    const currentPast =
+      pastRef.current;
+
+    if (
+      currentPast.length ===
+      0
+    ) {
+      return;
+    }
+
+    const previous =
+      currentPast[
+        currentPast.length - 1
+      ];
+
+    const remainingPast =
+      currentPast.slice(
+        0,
+        -1,
+      );
+
+    const currentFields =
+      cloneFields(
+        fieldsRef.current,
+      );
+
+    const nextFuture = [
+      ...futureRef.current,
+      currentFields,
+    ];
+
+    pastRef.current =
+      remainingPast;
+
+    futureRef.current =
+      nextFuture;
+
+    setPast(
+      remainingPast,
+    );
+
+    setFuture(
+      nextFuture,
+    );
+
+    const restored =
+      cloneFields(
+        previous,
+      );
+
+    fieldsRef.current =
+      restored;
+
+    setFields(
+      restored,
+    );
+
+    setIsSaved(false);
+
+    setSelectedFieldId(
+      (currentSelected) =>
+        currentSelected &&
+        restored.some(
+          (field) =>
+            field.id ===
+            currentSelected,
+        )
+          ? currentSelected
+          : null,
+    );
+  };
+
+  /* =========================================
+     REDO
+     ========================================= */
+
+  const handleRedo = () => {
+    flushPendingHistory();
+
+    const currentFuture =
+      futureRef.current;
+
+    if (
+      currentFuture.length ===
+      0
+    ) {
+      return;
+    }
+
+    const next =
+      currentFuture[
+        currentFuture.length - 1
+      ];
+
+    const remainingFuture =
+      currentFuture.slice(
+        0,
+        -1,
+      );
+
+    const currentFields =
+      cloneFields(
+        fieldsRef.current,
+      );
+
+    const nextPast = [
+      ...pastRef.current,
+      currentFields,
+    ];
+
+    pastRef.current =
+      nextPast;
+
+    futureRef.current =
+      remainingFuture;
+
+    setPast(
+      nextPast,
+    );
+
+    setFuture(
+      remainingFuture,
+    );
+
+    const restored =
+      cloneFields(
+        next,
+      );
+
+    fieldsRef.current =
+      restored;
+
+    setFields(
+      restored,
+    );
+
+    setIsSaved(false);
+
+    setSelectedFieldId(
+      (currentSelected) =>
+        currentSelected &&
+        restored.some(
+          (field) =>
+            field.id ===
+            currentSelected,
+        )
+          ? currentSelected
+          : null,
+    );
+  };
+
+  /* =========================================
+     KEYBOARD SHORTCUTS
+     ========================================= */
+
+  useEffect(() => {
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      const target =
+        event.target;
+
+      if (
+        target instanceof
+          HTMLInputElement ||
+        target instanceof
+          HTMLTextAreaElement ||
+        target instanceof
+          HTMLSelectElement
+      ) {
+        return;
+      }
+
+      const modifier =
+        event.ctrlKey ||
+        event.metaKey;
+
+      if (!modifier) {
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() ===
+        "z"
+      ) {
+        event.preventDefault();
+
+        if (
+          event.shiftKey
+        ) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() ===
+        "y"
+      ) {
+        event.preventDefault();
+
+        handleRedo();
+
+        return;
+      }
+
+      if (event.key === "0") {
+        event.preventDefault();
+        setZoom(100);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  });
+
+  /* =========================================
      RETURN TO UPLOAD SCREEN
      ========================================= */
 
   const handleBack = () => {
+    documentSessionRef.current +=
+      1;
+
+    clearHistoryTimer();
+
+    historySnapshotRef.current =
+      null;
+
+    fieldsRef.current =
+      [];
+
+    pastRef.current =
+      [];
+
+    futureRef.current =
+      [];
+
     setFile(null);
 
     setFields([]);
+
+    setPast([]);
+
+    setFuture([]);
 
     setDocxDocumentElement(
       null,
@@ -470,9 +1102,71 @@ function App() {
       null,
     );
 
-    setTool("select");
+    setTool(
+      "select",
+    );
 
-    setIsExporting(false);
+    setIsExporting(
+      false,
+    );
+
+    setIsSaved(
+      false,
+    );
+
+    setZoom(100);
+  };
+
+  /* =========================================
+     SAVE
+     ========================================= */
+
+  const handleSave = () => {
+    if (!file) {
+      return;
+    }
+
+    const savedState:
+      SavedDocumentState = {
+      fileName:
+        file.name,
+
+      fileSize:
+        file.size,
+
+      lastModified:
+        file.lastModified,
+
+      fields:
+        cloneFields(
+          fieldsRef.current,
+        ),
+
+      savedAt:
+        Date.now(),
+    };
+
+    try {
+      window.localStorage.setItem(
+        getStorageKey(file),
+        JSON.stringify(
+          savedState,
+        ),
+      );
+
+      setIsSaved(
+        true,
+      );
+    } catch (error) {
+      console.error(
+        "Save error:",
+        error,
+      );
+
+      window.alert(
+        "Unable to save this document state in your browser.",
+      );
+    }
   };
 
   /* =========================================
@@ -485,41 +1179,31 @@ function App() {
         return;
       }
 
-      setIsExporting(true);
+      flushPendingHistory();
+
+      setIsExporting(
+        true,
+      );
 
       try {
-        /*
-         * PDF export.
-         */
         if (isPdf) {
           await downloadExportedPdf(
             file,
-            fields,
+            fieldsRef.current,
           );
 
           return;
         }
 
-        /*
-         * Image export.
-         */
         if (isImage) {
           await exportImage(
             file,
-            fields,
+            fieldsRef.current,
           );
 
           return;
         }
 
-        /*
-         * DOCX export.
-         *
-         * Capture the actual rendered
-         * SignFlow DOCX page so the
-         * fields remain exactly where
-         * the user positioned them.
-         */
         if (isDocx) {
           if (
             !docxDocumentElement
@@ -557,9 +1241,47 @@ function App() {
           "Something went wrong while exporting the document.",
         );
       } finally {
-        setIsExporting(false);
+        setIsExporting(
+          false,
+        );
       }
     };
+
+  /* =========================================
+     ZOOM
+     ========================================= */
+
+  const handleZoomOut =
+    () => {
+      setZoom(
+        (currentZoom) =>
+          Math.max(
+            MIN_ZOOM,
+            currentZoom -
+              ZOOM_STEP,
+          ),
+      );
+    };
+
+  const handleZoomIn =
+    () => {
+      setZoom(
+        (currentZoom) =>
+          Math.min(
+            MAX_ZOOM,
+            currentZoom +
+              ZOOM_STEP,
+          ),
+      );
+    };
+
+  const handleZoomReset =
+    () => {
+      setZoom(100);
+    };
+
+  const zoomLabel =
+    `${zoom}%`;
 
   /* =========================================
      SELECTED FIELD
@@ -571,7 +1293,7 @@ function App() {
           (field) =>
             field.id ===
             selectedFieldId,
-        )
+        ) ?? null
       : null;
 
   /* =========================================
@@ -601,6 +1323,7 @@ function App() {
 
             <h1>
               Sign documents
+              <br />
               with ease
             </h1>
 
@@ -685,7 +1408,15 @@ function App() {
           <button
             type="button"
             className="icon-button"
+            onClick={
+              handleUndo
+            }
+            disabled={
+              past.length ===
+              0
+            }
             aria-label="Undo"
+            title="Undo"
           >
             <Undo2
               size={18}
@@ -695,7 +1426,15 @@ function App() {
           <button
             type="button"
             className="icon-button"
+            onClick={
+              handleRedo
+            }
+            disabled={
+              future.length ===
+              0
+            }
             aria-label="Redo"
+            title="Redo"
           >
             <Redo2
               size={18}
@@ -704,21 +1443,78 @@ function App() {
 
           <div className="divider" />
 
-          <span className="zoom">
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={
+              handleZoomOut
+            }
+            disabled={
+              zoom <=
+              MIN_ZOOM
+            }
+            aria-label="Zoom out"
+            title="Zoom out"
+          >
+            −
+          </button>
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={handleZoomReset}
+            disabled={zoom === 100}
+            aria-label="Reset zoom to 100%"
+            title="Reset zoom to 100%"
+          >
             100%
+          </button>
+
+          <span
+            className="zoom"
+            aria-live="polite"
+            aria-label={`Current zoom ${zoomLabel}`}
+          >
+            {zoomLabel}
           </span>
+
+          <button
+            type="button"
+            className="zoom-button"
+            onClick={
+              handleZoomIn
+            }
+            disabled={
+              zoom >=
+              MAX_ZOOM
+            }
+            aria-label="Zoom in"
+            title="Zoom in"
+          >
+            +
+          </button>
         </div>
 
         <div className="topbar-right">
           <button
             type="button"
             className="secondary-button"
+            onClick={
+              handleSave
+            }
+            title={
+              isSaved
+                ? "Saved"
+                : "Save document"
+            }
           >
             <Save
               size={17}
             />
 
-            Save
+            {isSaved
+              ? "Saved"
+              : "Save"}
           </button>
 
           <button
@@ -771,11 +1567,6 @@ function App() {
                         : ""
                     }`}
                     onClick={() => {
-                      /*
-                       * Selecting a new
-                       * tool clears the
-                       * current selection.
-                       */
                       setSelectedFieldId(
                         null,
                       );
@@ -806,7 +1597,12 @@ function App() {
             ================================= */}
 
         <main className="canvas-area">
-          <div className="document-page">
+          <div
+            className="document-page"
+            data-signflow-zoom={
+              zoom
+            }
+          >
             {isPdf ? (
               <DocumentViewer
                 file={file}
@@ -818,6 +1614,9 @@ function App() {
                 }
                 selectedFieldId={
                   selectedFieldId
+                }
+                zoom={
+                  zoom
                 }
                 onAddField={
                   addField
@@ -844,6 +1643,7 @@ function App() {
                 selectedFieldId={
                   selectedFieldId
                 }
+                zoom={zoom}
                 onAddField={
                   addField
                 }
@@ -869,6 +1669,7 @@ function App() {
                 selectedFieldId={
                   selectedFieldId
                 }
+                zoom={zoom}
                 onAddField={
                   addField
                 }
@@ -919,10 +1720,6 @@ function App() {
           <div className="sidebar-heading">
             PROPERTIES
           </div>
-
-          {/* =================================
-              SELECTED FIELD
-              ================================= */}
 
           {selectedField ? (
             <div className="selected-tool">
@@ -989,10 +1786,6 @@ function App() {
             </div>
           ) : tool ===
             "select" ? (
-            /* =================================
-               NOTHING SELECTED
-               ================================= */
-
             <div className="empty-properties">
               <MousePointer2
                 size={22}
@@ -1005,10 +1798,6 @@ function App() {
               </p>
             </div>
           ) : (
-            /* =================================
-               TOOL SELECTED
-               ================================= */
-
             <div className="selected-tool">
               <div className="selected-icon">
                 {(() => {
