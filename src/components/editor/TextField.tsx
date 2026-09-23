@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -49,8 +50,11 @@ const MAX_HEIGHT = 600;
 
 const KEYBOARD_STEP = 1;
 const KEYBOARD_FAST_STEP = 10;
+
 const PRECISION_STEP = 2;
 const PRECISION_FAST_STEP = 10;
+const PRECISION_CONTROLLER_HEIGHT = 86;
+const PRECISION_CONTROLLER_MARGIN = 12;
 
 /*
  * ============================================================
@@ -251,6 +255,95 @@ export default function TextField({
     useRef<HTMLDivElement | null>(
       null,
     );
+
+  /*
+   * Touch-only precision controls.
+   *
+   * Desktop users keep the existing mouse/keyboard workflow.
+   * The precision controller is only rendered for coarse pointers
+   * such as phones, tablets, and touch-first screens.
+   */
+  const [isCoarsePointer, setIsCoarsePointer] =
+    useState(false);
+
+  const [precisionAbove, setPrecisionAbove] =
+    useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      "(pointer: coarse)",
+    );
+
+    const updatePointerMode = () => {
+      setIsCoarsePointer(mediaQuery.matches);
+    };
+
+    updatePointerMode();
+
+    mediaQuery.addEventListener(
+      "change",
+      updatePointerMode,
+    );
+
+    return () => {
+      mediaQuery.removeEventListener(
+        "change",
+        updatePointerMode,
+      );
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!selected) {
+      return;
+    }
+
+    const updatePrecisionPosition = () => {
+      const fieldElement =
+        fieldRef.current;
+
+      if (!fieldElement) {
+        return;
+      }
+
+      const documentLayerElement =
+        getInteractionContainer(
+          fieldElement,
+        );
+
+      if (!documentLayerElement) {
+        return;
+      }
+
+      const controllerSpace =
+        PRECISION_CONTROLLER_HEIGHT +
+        PRECISION_CONTROLLER_MARGIN;
+
+      const shouldPlaceAbove =
+        field.y +
+          field.height +
+          controllerSpace >
+        documentLayerElement.offsetHeight;
+
+      setPrecisionAbove(
+        shouldPlaceAbove,
+      );
+    };
+
+    const frame = window.requestAnimationFrame(
+      updatePrecisionPosition,
+    );
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    selected,
+    field.x,
+    field.y,
+    field.width,
+    field.height,
+  ]);
 
   /*
    * ==========================================================
@@ -1241,69 +1334,6 @@ export default function TextField({
    * ==========================================================
    */
 
-  /*
-   * ============================================================
-   * MOBILE / PRECISION POSITIONING
-   * ============================================================
-   *
-   * The precision mover gives touch users a reliable way to make
-   * small final adjustments after dragging a field into position.
-   */
-  const movePrecisely = (
-    direction: "left" | "right" | "up" | "down",
-    fast = false,
-  ) => {
-    const fieldElement = fieldRef.current;
-
-    if (!fieldElement) {
-      return;
-    }
-
-    const documentLayerElement =
-      getInteractionContainer(fieldElement);
-
-    if (!documentLayerElement) {
-      return;
-    }
-
-    const step = fast
-      ? PRECISION_FAST_STEP
-      : PRECISION_STEP;
-
-    const nextPosition = clampFieldPosition(
-      direction === "left"
-        ? field.x - step
-        : direction === "right"
-          ? field.x + step
-          : field.x,
-      direction === "up"
-        ? field.y - step
-        : direction === "down"
-          ? field.y + step
-          : field.y,
-      field.width,
-      field.height,
-      documentLayerElement,
-    );
-
-    onUpdate(field.id, {
-      x: nextPosition.x,
-      y: nextPosition.y,
-    });
-  };
-
-  const handlePrecisionPointerDown = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    direction: "left" | "right" | "up" | "down",
-    fast = false,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    onSelect(field.id);
-    movePrecisely(direction, fast);
-  };
-
   const handleFieldPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
@@ -1350,6 +1380,74 @@ export default function TextField({
     event.stopPropagation();
 
     onSelect(field.id);
+  };
+
+  /*
+   * ==========================================================
+   * TOUCH PRECISION MOVEMENT
+   * ==========================================================
+   *
+   * These controls are intentionally separate from the field
+   * box. They are a touch-device fallback for precise placement
+   * when a mouse or keyboard is unavailable.
+   */
+  const moveFieldPrecisely = (
+    deltaX: number,
+    deltaY: number,
+  ) => {
+    const fieldElement =
+      fieldRef.current;
+
+    if (!fieldElement) {
+      return;
+    }
+
+    const documentLayerElement =
+      getInteractionContainer(
+        fieldElement,
+      );
+
+    if (!documentLayerElement) {
+      return;
+    }
+
+    const nextPosition =
+      clampFieldPosition(
+        field.x + deltaX,
+        field.y + deltaY,
+        field.width,
+        field.height,
+        documentLayerElement,
+      );
+
+    onSelect(field.id);
+
+    onUpdate(
+      field.id,
+      {
+        x: nextPosition.x,
+        y: nextPosition.y,
+      },
+    );
+  };
+
+  const handlePrecisionPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    deltaX: number,
+    deltaY: number,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const step =
+      event.shiftKey
+        ? PRECISION_FAST_STEP
+        : PRECISION_STEP;
+
+    moveFieldPrecisely(
+      deltaX * step,
+      deltaY * step,
+    );
   };
 
   /*
@@ -1767,157 +1865,6 @@ export default function TextField({
             </div>
 
             {/* ================================================
-                PRECISION MOVER
-                ================================================ */}
-
-            <div
-              className="field-precision-mover"
-              role="group"
-              aria-label="Precise text field positioning"
-              style={{
-                position: "absolute",
-                left: "50%",
-                bottom: "-58px",
-                transform: "translateX(-50%)",
-                zIndex: 5004,
-                display: "grid",
-                gridTemplateColumns: "32px 32px 32px",
-                gridTemplateRows: "32px 32px",
-                gap: "3px",
-                padding: "4px",
-                borderRadius: "8px",
-                background: "rgba(255, 255, 255, 0.98)",
-                border: "1px solid rgba(0, 0, 0, 0.16)",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.16)",
-                pointerEvents: "auto",
-                touchAction: "none",
-                userSelect: "none",
-              }}
-            >
-              <span aria-hidden="true" />
-
-              <button
-                type="button"
-                aria-label="Move text field up"
-                title="Move up 2px"
-                onPointerDown={(event) =>
-                  handlePrecisionPointerDown(
-                    event,
-                    "up",
-                  )
-                }
-                style={{
-                  gridColumn: "2",
-                  gridRow: "1",
-                  width: "32px",
-                  height: "32px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "6px",
-                  background: "#fff",
-                  color: "#111",
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  padding: 0,
-                  touchAction: "none",
-                  cursor: "pointer",
-                }}
-              >
-                ↑
-              </button>
-
-              <button
-                type="button"
-                aria-label="Move text field left"
-                title="Move left 2px"
-                onPointerDown={(event) =>
-                  handlePrecisionPointerDown(
-                    event,
-                    "left",
-                  )
-                }
-                style={{
-                  gridColumn: "1",
-                  gridRow: "2",
-                  width: "32px",
-                  height: "32px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "6px",
-                  background: "#fff",
-                  color: "#111",
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  padding: 0,
-                  touchAction: "none",
-                  cursor: "pointer",
-                }}
-              >
-                ←
-              </button>
-
-              <button
-                type="button"
-                aria-label="Move text field down"
-                title="Move down 2px"
-                onPointerDown={(event) =>
-                  handlePrecisionPointerDown(
-                    event,
-                    "down",
-                  )
-                }
-                style={{
-                  gridColumn: "2",
-                  gridRow: "2",
-                  width: "32px",
-                  height: "32px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "6px",
-                  background: "#fff",
-                  color: "#111",
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  padding: 0,
-                  touchAction: "none",
-                  cursor: "pointer",
-                }}
-              >
-                ↓
-              </button>
-
-              <button
-                type="button"
-                aria-label="Move text field right"
-                title="Move right 2px"
-                onPointerDown={(event) =>
-                  handlePrecisionPointerDown(
-                    event,
-                    "right",
-                  )
-                }
-                style={{
-                  gridColumn: "3",
-                  gridRow: "2",
-                  width: "32px",
-                  height: "32px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "6px",
-                  background: "#fff",
-                  color: "#111",
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  padding: 0,
-                  touchAction: "none",
-                  cursor: "pointer",
-                }}
-              >
-                →
-              </button>
-            </div>
-
-            {/* ================================================
                 DELETE BUTTON
                 ================================================ */}
 
@@ -1953,6 +1900,240 @@ export default function TextField({
           </>
         )}
       </div>
+
+      {selected && isCoarsePointer && (
+        <div
+          className="field-controls field-precision-controller"
+          aria-label="Precise text field positioning controls"
+          style={{
+            position: "absolute",
+            left: `clamp(70px, ${
+              field.x + field.width / 2
+            }px, calc(100% - 70px))`,
+            top: precisionAbove
+              ? `${Math.max(
+                  70,
+                  field.y -
+                    PRECISION_CONTROLLER_MARGIN,
+                )}px`
+              : `${
+                  field.y +
+                  field.height +
+                  PRECISION_CONTROLLER_MARGIN
+                }px`,
+            transform: precisionAbove
+              ? "translate(-50%, -100%)"
+              : "translateX(-50%)",
+            zIndex: 7000,
+            pointerEvents: "none",
+            touchAction: "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "40px 40px 40px",
+              gridTemplateRows:
+                "32px 32px 32px",
+              gap: "2px",
+              alignItems: "center",
+              justifyItems: "center",
+              padding: "4px",
+              borderRadius: "10px",
+              background:
+                "rgba(24, 24, 24, 0.96)",
+              border:
+                "1px solid rgba(255, 255, 255, 0.16)",
+              boxShadow:
+                "0 8px 24px rgba(0, 0, 0, 0.28)",
+              pointerEvents: "auto",
+              touchAction: "none",
+              WebkitTapHighlightColor:
+                "transparent",
+            }}
+          >
+            <div />
+
+            <button
+              type="button"
+              aria-label="Move text field up"
+              title="Move up"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  -1,
+                )
+              }
+              style={{
+                width: "40px",
+                height: "32px",
+                border: "0",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#181818",
+                fontSize: "18px",
+                fontWeight: 800,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                cursor: "pointer",
+                touchAction: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+              }}
+            >
+              ↑
+            </button>
+
+            <div />
+
+            <button
+              type="button"
+              aria-label="Move text field left"
+              title="Move left"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  -1,
+                  0,
+                )
+              }
+              style={{
+                width: "40px",
+                height: "32px",
+                border: "0",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#181818",
+                fontSize: "18px",
+                fontWeight: 800,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                cursor: "pointer",
+                touchAction: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+              }}
+            >
+              ←
+            </button>
+
+            <div
+              aria-hidden="true"
+              style={{
+                width: "40px",
+                height: "32px",
+                borderRadius: "7px",
+                background:
+                  "rgba(255, 255, 255, 0.12)",
+                color: "#ffffff",
+                fontSize: "8px",
+                fontWeight: 700,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                pointerEvents: "none",
+              }}
+            >
+              {Math.round(field.x)} ·{" "}
+              {Math.round(field.y)}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Move text field right"
+              title="Move right"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  1,
+                  0,
+                )
+              }
+              style={{
+                width: "40px",
+                height: "32px",
+                border: "0",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#181818",
+                fontSize: "18px",
+                fontWeight: 800,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                cursor: "pointer",
+                touchAction: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+              }}
+            >
+              →
+            </button>
+
+            <div />
+
+            <button
+              type="button"
+              aria-label="Move text field down"
+              title="Move down"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  1,
+                )
+              }
+              style={{
+                width: "40px",
+                height: "32px",
+                border: "0",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#181818",
+                fontSize: "18px",
+                fontWeight: 800,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                cursor: "pointer",
+                touchAction: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+              }}
+            >
+              ↓
+            </button>
+
+            <div />
+          </div>
+        </div>
+      )}
     </>
   );
 }
