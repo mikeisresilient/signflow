@@ -330,7 +330,7 @@ function PdfPage({
      */
     const scrollContainer =
       pageRef.current?.closest(
-        ".signflow-pdf-scroll",
+        ".signflow-pdf-horizontal-scroll",
       ) as HTMLElement | null;
 
     const observer =
@@ -865,10 +865,16 @@ export default function DocumentViewer({
     );
 
   /**
-   * Scroll only the SignFlow document container.
+   * Navigate to an exact PDF page.
    *
-   * This avoids scrollIntoView() choosing an unrelated ancestor on mobile
-   * browsers and accidentally moving the application shell.
+   * The page lives inside .signflow-pdf-horizontal-scroll, so navigation
+   * moves that container directly. We intentionally avoid scrollIntoView()
+   * because it can choose the wrong scrolling ancestor on desktop, tablet,
+   * and mobile browsers.
+   *
+   * The actual rendered page position is calculated from getBoundingClientRect
+   * plus the scroll container's current scrollTop. This remains correct when
+   * the PDF is responsive, zoomed, padded, or rendered inside nested elements.
    */
   const goToPage =
     useCallback(
@@ -879,20 +885,32 @@ export default function DocumentViewer({
           return;
         }
 
+        const numericPage =
+          Number(pageNumber);
+
+        if (
+          !Number.isFinite(
+            numericPage,
+          )
+        ) {
+          return;
+        }
+
         const safePage =
           Math.round(
             clamp(
-              pageNumber,
+              numericPage,
               1,
               numPages,
             ),
           );
 
-        const pageElement =
-          pageRefs.current.get(
-            safePage,
-          );
+        const container =
+          scrollRef.current;
 
+        /*
+         * Keep the page controls synchronized immediately.
+         */
         setCurrentPage(
           safePage,
         );
@@ -901,44 +919,74 @@ export default function DocumentViewer({
           String(safePage),
         );
 
-        if (
-          !pageElement
-        ) {
-          return;
-        }
-
-        const container =
-          scrollRef.current;
-
         if (!container) {
-          pageElement.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-
           return;
         }
 
-        const containerRect =
-          container.getBoundingClientRect();
+        const moveToRenderedPage =
+          () => {
+            const pageElement =
+              pageRefs.current.get(
+                safePage,
+              );
 
-        const pageRect =
-          pageElement.getBoundingClientRect();
+            if (
+              !pageElement
+            ) {
+              return false;
+            }
 
-        const targetTop =
-          container.scrollTop +
-          (
-            pageRect.top -
-            containerRect.top
-          ) -
-          8;
+            const containerRect =
+              container.getBoundingClientRect();
 
-        container.scrollTo({
-          top: Math.max(
-            0,
-            targetTop,
-          ),
-          behavior: "smooth",
+            const pageRect =
+              pageElement.getBoundingClientRect();
+
+            /*
+             * Convert the page's current screen position into the document
+             * scroll coordinate of SignFlow's actual PDF scroll container.
+             */
+            const targetTop =
+              container.scrollTop +
+              (
+                pageRect.top -
+                containerRect.top
+              ) -
+              8;
+
+            const maxScrollTop =
+              Math.max(
+                0,
+                container.scrollHeight -
+                  container.clientHeight,
+              );
+
+            container.scrollTop =
+              clamp(
+                targetTop,
+                0,
+                maxScrollTop,
+              );
+
+            return true;
+          };
+
+        /*
+         * React-PDF can still be painting/measuring the requested page when
+         * the navigation button is clicked. Try immediately, then once more
+         * after layout has settled.
+         */
+        moveToRenderedPage();
+
+        requestAnimationFrame(() => {
+          if (
+            scrollRef.current !==
+            container
+          ) {
+            return;
+          }
+
+          moveToRenderedPage();
         });
       },
       [
@@ -1214,17 +1262,23 @@ export default function DocumentViewer({
       width: "100%",
       maxWidth: "100%",
       minWidth: 0,
+      height: "100%",
+      minHeight: 0,
+      display: "flex",
+      flexDirection: "column",
       position: "relative",
       boxSizing: "border-box",
+      overflow: "visible",
     };
 
   const navigationStyle:
     CSSProperties = {
       position: "sticky",
       top: 0,
-      zIndex: 1000,
+      zIndex: 5000,
       width: "100%",
       minWidth: 0,
+      flex: "0 0 auto",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1233,7 +1287,7 @@ export default function DocumentViewer({
       margin: 0,
       boxSizing: "border-box",
       background:
-        "rgba(255,255,255,0.97)",
+        "rgba(255,255,255,0.98)",
       borderBottom:
         "1px solid rgba(15,23,42,0.10)",
       boxShadow:
@@ -1242,6 +1296,9 @@ export default function DocumentViewer({
         "blur(12px)",
       WebkitBackdropFilter:
         "blur(12px)",
+      WebkitTapHighlightColor:
+        "transparent",
+      pointerEvents: "auto",
       isolation: "isolate",
     };
 
@@ -1262,6 +1319,9 @@ export default function DocumentViewer({
       lineHeight: 1,
       flexShrink: 0,
       touchAction: "manipulation",
+      pointerEvents: "auto",
+      userSelect: "none",
+      WebkitUserSelect: "none",
       boxSizing: "border-box",
     };
 
@@ -1287,6 +1347,9 @@ export default function DocumentViewer({
             onClick={
               handlePreviousPage
             }
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
             disabled={
               currentPage <= 1
             }
@@ -1345,6 +1408,9 @@ export default function DocumentViewer({
               onKeyDown={
                 handlePageInputKeyDown
               }
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
               aria-label="Current page"
               style={{
                 width: 48,
@@ -1363,6 +1429,8 @@ export default function DocumentViewer({
                 boxSizing:
                   "border-box",
                 flexShrink: 0,
+                pointerEvents: "auto",
+                touchAction: "manipulation",
               }}
             />
 
@@ -1376,6 +1444,9 @@ export default function DocumentViewer({
             onClick={
               handleNextPage
             }
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
             disabled={
               currentPage >=
               numPages
@@ -1410,13 +1481,17 @@ export default function DocumentViewer({
         ref={
           scrollRef
         }
-        className="signflow-pdf-scroll"
+        className="signflow-pdf-horizontal-scroll"
         style={{
           width: "100%",
           maxWidth: "100%",
           minWidth: 0,
-          height: "100%",
-          maxHeight: "100%",
+          flex: "1 1 auto",
+          minHeight: 0,
+          paddingTop: 8,
+          height: "auto",
+          maxHeight: "none",
+          position: "relative",
           overflowX:
             safeZoom > 1
               ? "auto"
@@ -1425,8 +1500,6 @@ export default function DocumentViewer({
           boxSizing:
             "border-box",
           overscrollBehaviorX:
-            "contain",
-          overscrollBehaviorY:
             "contain",
           WebkitOverflowScrolling:
             "touch",
@@ -1457,7 +1530,12 @@ export default function DocumentViewer({
             pageRefs.current.clear();
 
             requestAnimationFrame(() => {
-              scrollRef.current?.scrollTo({
+              const canvas =
+                viewerRef.current?.querySelector(
+                  ".signflow-pdf-horizontal-scroll",
+                ) as HTMLElement | null;
+
+              canvas?.scrollTo({
                 top: 0,
                 left: 0,
                 behavior: "auto",
@@ -1478,7 +1556,12 @@ export default function DocumentViewer({
             pageRefs.current.clear();
 
             requestAnimationFrame(() => {
-              scrollRef.current?.scrollTo({
+              const canvas =
+                viewerRef.current?.querySelector(
+                  ".signflow-pdf-horizontal-scroll",
+                ) as HTMLElement | null;
+
+              canvas?.scrollTo({
                 top: 0,
                 left: 0,
                 behavior: "auto",
