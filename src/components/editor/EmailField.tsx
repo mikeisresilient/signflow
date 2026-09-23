@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, PointerEvent } from "react";
 
 import type { DocumentField } from "../../types/document";
@@ -32,6 +32,68 @@ interface InteractionState {
 
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 32;
+const MAX_WIDTH = 700;
+const MAX_HEIGHT = 300;
+
+const PRECISION_STEP = 2;
+const PRECISION_FAST_STEP = 10;
+const PRECISION_CONTROLLER_HEIGHT = 86;
+const PRECISION_CONTROLLER_MARGIN = 12;
+
+/*
+ * --------------------------------------------------
+ * FIND THE ACTUAL DOCUMENT COORDINATE CONTAINER
+ * --------------------------------------------------
+ *
+ * Resize handles are children of the field itself.
+ * Therefore their offsetParent is normally the field,
+ * NOT the document field layer.
+ *
+ * We always resolve the parent layer explicitly.
+ */
+const getInteractionContainer = (
+  element: HTMLElement
+): HTMLElement | null => {
+  const fieldElement =
+    element.closest(".email-field");
+
+  if (fieldElement instanceof HTMLElement) {
+    const parent =
+      fieldElement.parentElement;
+
+    if (parent instanceof HTMLElement) {
+      return parent;
+    }
+  }
+
+  let currentElement: HTMLElement | null =
+    element.parentElement;
+
+  while (currentElement) {
+    const classNameValue =
+      typeof currentElement.className === "string"
+        ? currentElement.className
+        : "";
+
+    if (
+      classNameValue.includes("field-layer") ||
+      classNameValue.includes("docx-field-layer") ||
+      classNameValue.includes("image-field-layer")
+    ) {
+      return currentElement;
+    }
+
+    currentElement =
+      currentElement.parentElement;
+  }
+
+  const offsetParent =
+    element.offsetParent;
+
+  return offsetParent instanceof HTMLElement
+    ? offsetParent
+    : null;
+};
 
 export default function EmailField({
   field,
@@ -46,59 +108,171 @@ export default function EmailField({
   const [isEditing, setIsEditing] =
     useState(false);
 
-  /*
-   * --------------------------------------------------
-   * FIND THE ACTUAL DOCUMENT COORDINATE CONTAINER
-   * --------------------------------------------------
-   *
-   * Resize handles are children of the field itself.
-   * Therefore their offsetParent is normally the field,
-   * NOT the document field layer.
-   *
-   * We always resolve the parent layer explicitly.
-   */
-  const getInteractionContainer = (
-    element: HTMLElement
-  ): HTMLElement | null => {
-    const fieldElement =
-      element.closest(".email-field");
+  const [isCoarsePointer, setIsCoarsePointer] =
+    useState(false);
 
-    if (fieldElement instanceof HTMLElement) {
-      const parent =
-        fieldElement.parentElement;
+  const [precisionAbove, setPrecisionAbove] =
+    useState(false);
 
-      if (parent instanceof HTMLElement) {
-        return parent;
-      }
+  const fieldRef =
+    useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      "(pointer: coarse)"
+    );
+
+    const updatePointerMode = () => {
+      setIsCoarsePointer(mediaQuery.matches);
+    };
+
+    updatePointerMode();
+
+    mediaQuery.addEventListener(
+      "change",
+      updatePointerMode
+    );
+
+    return () => {
+      mediaQuery.removeEventListener(
+        "change",
+        updatePointerMode
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selected || !isCoarsePointer) {
+      return;
     }
 
-    let currentElement: HTMLElement | null =
-      element.parentElement;
+    const frame =
+      window.requestAnimationFrame(() => {
+        const element =
+          fieldRef.current;
 
-    while (currentElement) {
-      const classNameValue =
-        typeof currentElement.className === "string"
-          ? currentElement.className
-          : "";
+        if (!element) {
+          return;
+        }
 
-      if (
-        classNameValue.includes("field-layer") ||
-        classNameValue.includes("docx-field-layer") ||
-        classNameValue.includes("image-field-layer")
-      ) {
-        return currentElement;
-      }
+        const container =
+          getInteractionContainer(element);
 
-      currentElement =
-        currentElement.parentElement;
+        if (!container) {
+          return;
+        }
+
+        const controllerSpace =
+          PRECISION_CONTROLLER_HEIGHT +
+          PRECISION_CONTROLLER_MARGIN;
+
+        const shouldPlaceAbove =
+          field.y +
+            field.height +
+            controllerSpace >
+          container.offsetHeight;
+
+        setPrecisionAbove(shouldPlaceAbove);
+      });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    selected,
+    isCoarsePointer,
+    field.x,
+    field.y,
+    field.width,
+    field.height,
+  ]);
+
+  const moveFieldPrecisely = (
+    deltaX: number,
+    deltaY: number
+  ) => {
+    const element =
+      fieldRef.current;
+
+    if (!element) {
+      return;
     }
 
-    const offsetParent =
-      element.offsetParent;
+    const container =
+      getInteractionContainer(element);
 
-    return offsetParent instanceof HTMLElement
-      ? offsetParent
-      : null;
+    if (!container) {
+      return;
+    }
+
+    const fieldWidth =
+      Math.max(
+        MIN_WIDTH,
+        field.width
+      );
+
+    const fieldHeight =
+      Math.max(
+        MIN_HEIGHT,
+        field.height
+      );
+
+    const maxX =
+      Math.max(
+        0,
+        container.offsetWidth -
+          fieldWidth
+      );
+
+    const maxY =
+      Math.max(
+        0,
+        container.offsetHeight -
+          fieldHeight
+      );
+
+    const nextX =
+      Math.min(
+        maxX,
+        Math.max(
+          0,
+          field.x + deltaX
+        )
+      );
+
+    const nextY =
+      Math.min(
+        maxY,
+        Math.max(
+          0,
+          field.y + deltaY
+        )
+      );
+
+    onUpdate(field.id, {
+      x: nextX,
+      y: nextY,
+    });
+  };
+
+  const handlePrecisionPointerDown = (
+    event: PointerEvent<HTMLButtonElement>,
+    deltaX: number,
+    deltaY: number
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    onSelect(field.id);
+
+    const step = event.shiftKey
+      ? PRECISION_FAST_STEP
+      : PRECISION_STEP;
+
+    moveFieldPrecisely(
+      deltaX * step,
+      deltaY * step
+    );
   };
 
   /*
@@ -369,14 +543,20 @@ export default function EmailField({
 
       const maxWidth = Math.max(
         MIN_WIDTH,
-        containerWidth -
-          state.initialX
+        Math.min(
+          MAX_WIDTH,
+          containerWidth -
+            state.initialX
+        )
       );
 
       const maxHeight = Math.max(
         MIN_HEIGHT,
-        containerHeight -
-          state.initialY
+        Math.min(
+          MAX_HEIGHT,
+          containerHeight -
+            state.initialY
+        )
       );
 
       const updates: Partial<DocumentField> =
@@ -505,6 +685,7 @@ export default function EmailField({
    */
   return (
     <div
+      ref={fieldRef}
       className={`email-field ${
         selected
           ? "email-field-selected"
@@ -513,9 +694,15 @@ export default function EmailField({
       style={{
         left: field.x,
         top: field.y,
-        width: field.width,
-        height: field.height,
-        touchAction: "none",
+        width: Math.max(
+          MIN_WIDTH,
+          field.width
+        ),
+        height: Math.max(
+          MIN_HEIGHT,
+          field.height
+        ),
+        touchAction: "auto",
       }}
       onPointerDown={
         handleDragStart
@@ -593,6 +780,160 @@ export default function EmailField({
           >
             ×
           </button>
+        </div>
+      )}
+
+      {selected && isCoarsePointer && (
+        <div
+          className="field-controls field-precision-controller"
+          style={{
+            position: "absolute",
+            left: "clamp(70px, 50%, calc(100% - 70px))",
+            top: precisionAbove
+              ? `-${PRECISION_CONTROLLER_HEIGHT + PRECISION_CONTROLLER_MARGIN}px`
+              : `calc(100% + ${PRECISION_CONTROLLER_MARGIN}px)`,
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+            zIndex: 7000,
+            touchAction: "none",
+          }}
+          onPointerDown={(event) =>
+            event.stopPropagation()
+          }
+          onClick={(event) =>
+            event.stopPropagation()
+          }
+        >
+          <div
+            style={{
+              pointerEvents: "auto",
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(3, 42px)",
+              gridTemplateRows:
+                "repeat(2, 36px)",
+              gap: "4px",
+              alignItems: "center",
+              justifyItems: "center",
+              padding: "5px",
+              borderRadius: "10px",
+              background:
+                "rgba(24, 24, 24, 0.96)",
+              boxShadow:
+                "0 8px 24px rgba(0,0,0,0.28)",
+            }}
+          >
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move email field up"
+              title="Move up 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  -1
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ↑
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move email field left"
+              title="Move left 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  -1,
+                  0
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ←
+            </button>
+
+            <div
+              style={{
+                minWidth: "42px",
+                textAlign: "center",
+                color: "#fff",
+                fontSize: "9px",
+                lineHeight: 1.15,
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+            >
+              <div>
+                X {Math.round(field.x)}
+              </div>
+              <div>
+                Y {Math.round(field.y)}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Move email field right"
+              title="Move right 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  1,
+                  0
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              →
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move email field down"
+              title="Move down 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  1
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ↓
+            </button>
+
+            <span aria-hidden="true" />
+          </div>
         </div>
       )}
 

@@ -723,8 +723,14 @@ export default function ImageViewer({
           overflowY: "visible",
           overscrollBehaviorX:
             "contain",
+          overscrollBehaviorY:
+            "contain",
           WebkitOverflowScrolling:
             "touch",
+          touchAction:
+            safeZoom > 1
+              ? "pan-x pan-y"
+              : "auto",
           boxSizing:
             "border-box",
           display: "flex",

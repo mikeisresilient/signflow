@@ -834,19 +834,14 @@ export default function DocxViewer({
         boxSizing:
           "border-box",
 
-        overflowX:
-          safeZoom > 1
-            ? "auto"
-            : "hidden",
-
-        overflowY:
-          "visible",
+        overflowX: "hidden",
+        overflowY: "hidden",
 
         overscrollBehaviorX:
-          "contain",
+          "none",
 
-        WebkitOverflowScrolling:
-          "touch",
+        overscrollBehaviorY:
+          "none",
       }}
     >
       {/*
@@ -873,13 +868,31 @@ export default function DocxViewer({
               : "hidden",
 
           overflowY:
-            "visible",
+            safeZoom > 1
+              ? "auto"
+              : "visible",
+
+          maxHeight:
+            safeZoom > 1
+              ? "calc(100vh - 150px)"
+              : "none",
+
+          overscrollBehavior:
+            "contain",
 
           overscrollBehaviorX:
             "contain",
 
+          overscrollBehaviorY:
+            "contain",
+
           WebkitOverflowScrolling:
             "touch",
+
+          touchAction:
+            safeZoom > 1
+              ? "pan-x pan-y"
+              : "auto",
 
           boxSizing:
             "border-box",

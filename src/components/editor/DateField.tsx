@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -34,6 +35,11 @@ interface ResizeState {
 
 const MIN_WIDTH = 130;
 const MIN_HEIGHT = 36;
+
+const PRECISION_STEP = 2;
+const PRECISION_FAST_STEP = 10;
+const PRECISION_CONTROLLER_HEIGHT = 86;
+const PRECISION_CONTROLLER_MARGIN = 12;
 
 const getInteractionLayer = (
   element: HTMLElement | null
@@ -129,8 +135,165 @@ export default function DateField({
   const activePointerId =
     useRef<number | null>(null);
 
+  const fieldRef =
+    useRef<HTMLDivElement | null>(null);
+
   const [value, setValue] =
     useState(field.value || "");
+
+  const [isCoarsePointer, setIsCoarsePointer] =
+    useState(false);
+
+  const [precisionAbove, setPrecisionAbove] =
+    useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      "(pointer: coarse)"
+    );
+
+    const updatePointerMode = () => {
+      setIsCoarsePointer(mediaQuery.matches);
+    };
+
+    updatePointerMode();
+
+    mediaQuery.addEventListener(
+      "change",
+      updatePointerMode
+    );
+
+    return () => {
+      mediaQuery.removeEventListener(
+        "change",
+        updatePointerMode
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selected || !isCoarsePointer) {
+      return;
+    }
+
+    const frame =
+      window.requestAnimationFrame(() => {
+        const element = fieldRef.current;
+
+        if (!element) {
+          return;
+        }
+
+        const layer =
+          getInteractionLayer(element);
+
+        if (!layer) {
+          return;
+        }
+
+        const controllerSpace =
+          PRECISION_CONTROLLER_HEIGHT +
+          PRECISION_CONTROLLER_MARGIN;
+
+        const shouldPlaceAbove =
+          field.y +
+            field.height +
+            controllerSpace >
+          layer.offsetHeight;
+
+        setPrecisionAbove(shouldPlaceAbove);
+      });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    selected,
+    isCoarsePointer,
+    field.x,
+    field.y,
+    field.width,
+    field.height,
+  ]);
+
+  const moveFieldPrecisely = (
+    deltaX: number,
+    deltaY: number
+  ) => {
+    const element = fieldRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const layer =
+      getInteractionLayer(element);
+
+    if (!layer) {
+      return;
+    }
+
+    const fieldWidth = Math.max(
+      MIN_WIDTH,
+      field.width
+    );
+
+    const fieldHeight = Math.max(
+      MIN_HEIGHT,
+      field.height
+    );
+
+    const maxX = Math.max(
+      0,
+      layer.offsetWidth - fieldWidth
+    );
+
+    const maxY = Math.max(
+      0,
+      layer.offsetHeight - fieldHeight
+    );
+
+    const nextX = Math.min(
+      maxX,
+      Math.max(
+        0,
+        field.x + deltaX
+      )
+    );
+
+    const nextY = Math.min(
+      maxY,
+      Math.max(
+        0,
+        field.y + deltaY
+      )
+    );
+
+    onUpdate(field.id, {
+      x: nextX,
+      y: nextY,
+    });
+  };
+
+  const handlePrecisionPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    deltaX: number,
+    deltaY: number
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    onSelect(field.id);
+
+    const step = event.shiftKey
+      ? PRECISION_FAST_STEP
+      : PRECISION_STEP;
+
+    moveFieldPrecisely(
+      deltaX * step,
+      deltaY * step
+    );
+  };
 
   const handleChange = (
     event: ChangeEvent<HTMLInputElement>
@@ -531,6 +694,7 @@ export default function DateField({
 
   return (
     <div
+      ref={fieldRef}
       className={`document-field date-field ${
         selected
           ? "date-field-selected"
@@ -608,6 +772,160 @@ export default function DateField({
           >
             ×
           </button>
+        </div>
+      )}
+
+      {selected && isCoarsePointer && (
+        <div
+          className="field-controls field-precision-controller"
+          style={{
+            position: "absolute",
+            left: "clamp(70px, 50%, calc(100% - 70px))",
+            top: precisionAbove
+              ? `-${PRECISION_CONTROLLER_HEIGHT + PRECISION_CONTROLLER_MARGIN}px`
+              : `calc(100% + ${PRECISION_CONTROLLER_MARGIN}px)`,
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+            zIndex: 7000,
+            touchAction: "none",
+          }}
+          onPointerDown={(event) =>
+            event.stopPropagation()
+          }
+          onClick={(event) =>
+            event.stopPropagation()
+          }
+        >
+          <div
+            style={{
+              pointerEvents: "auto",
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(3, 42px)",
+              gridTemplateRows:
+                "repeat(2, 36px)",
+              gap: "4px",
+              alignItems: "center",
+              justifyItems: "center",
+              padding: "5px",
+              borderRadius: "10px",
+              background:
+                "rgba(24, 24, 24, 0.96)",
+              boxShadow:
+                "0 8px 24px rgba(0,0,0,0.28)",
+            }}
+          >
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move date field up"
+              title="Move up 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  -1
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ↑
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move date field left"
+              title="Move left 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  -1,
+                  0
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ←
+            </button>
+
+            <div
+              style={{
+                minWidth: "42px",
+                textAlign: "center",
+                color: "#fff",
+                fontSize: "9px",
+                lineHeight: 1.15,
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+            >
+              <div>
+                X {Math.round(field.x)}
+              </div>
+              <div>
+                Y {Math.round(field.y)}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Move date field right"
+              title="Move right 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  1,
+                  0
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              →
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move date field down"
+              title="Move down 2px (Shift: 10px)"
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  1
+                )
+              }
+              style={{
+                width: "42px",
+                height: "36px",
+                touchAction: "none",
+                cursor: "pointer",
+              }}
+            >
+              ↓
+            </button>
+
+            <span aria-hidden="true" />
+          </div>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -57,6 +58,13 @@ const MAX_HEIGHT = 500;
 
 const CANVAS_WIDTH = 700;
 const CANVAS_HEIGHT = 260;
+
+// Touch precision controls are shown only on coarse pointer devices
+// such as phones and tablets. Desktop mouse/trackpad interaction remains unchanged.
+const PRECISION_STEP = 2;
+const PRECISION_FAST_STEP = 10;
+const PRECISION_CONTROLLER_HEIGHT = 86;
+const PRECISION_CONTROLLER_MARGIN = 12;
 
 const DEFAULT_SIGNATURE_FONT =
   '"Brush Script MT", "Segoe Script", cursive';
@@ -158,6 +166,15 @@ export default function SignatureField({
 
   const [isDrawing, setIsDrawing] =
     useState(false);
+
+  const [isCoarsePointer, setIsCoarsePointer] =
+    useState(false);
+
+  const [precisionAbove, setPrecisionAbove] =
+    useState(false);
+
+  const fieldRef =
+    useRef<HTMLDivElement | null>(null);
 
   const mode: SignatureMode =
     field.signatureMode || "draw";
@@ -1032,6 +1049,162 @@ export default function SignatureField({
   };
 
   /*
+   * Detect coarse pointer devices so the precision controller is used
+   * on touch screens without changing the existing desktop workflow.
+   */
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+
+    const updatePointerMode = () => {
+      setIsCoarsePointer(mediaQuery.matches);
+    };
+
+    updatePointerMode();
+
+    mediaQuery.addEventListener("change", updatePointerMode);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updatePointerMode);
+    };
+  }, []);
+
+  /*
+   * Decide whether the touch precision controller should appear above
+   * the field so it stays inside the document/page.
+   *
+   * requestAnimationFrame avoids a synchronous setState call inside
+   * the effect body while still measuring after layout has settled.
+   */
+  useEffect(() => {
+    if (!selected || !isCoarsePointer) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const fieldElement = fieldRef.current;
+
+      if (!fieldElement) {
+        return;
+      }
+
+      const container =
+        getInteractionContainer(fieldElement);
+
+      if (!container) {
+        return;
+      }
+
+      const controllerSpace =
+        PRECISION_CONTROLLER_HEIGHT +
+        PRECISION_CONTROLLER_MARGIN;
+
+      const shouldPlaceAbove =
+        field.y +
+          field.height +
+          controllerSpace >
+        container.offsetHeight;
+
+      setPrecisionAbove((current) =>
+        current === shouldPlaceAbove
+          ? current
+          : shouldPlaceAbove,
+      );
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    selected,
+    isCoarsePointer,
+    field.x,
+    field.y,
+    field.width,
+    field.height,
+  ]);
+
+  /*
+   * Move the signature field in small, predictable document-coordinate
+   * increments. This is intentionally separate from normal drag logic.
+   */
+  const moveFieldPrecisely = useCallback(
+    (deltaX: number, deltaY: number) => {
+      const fieldElement = fieldRef.current;
+
+      if (!fieldElement) {
+        return;
+      }
+
+      const container =
+        getInteractionContainer(fieldElement);
+
+      if (!container) {
+        return;
+      }
+
+      const width = Math.max(
+        MIN_WIDTH,
+        field.width,
+      );
+
+      const height = Math.max(
+        MIN_HEIGHT,
+        field.height,
+      );
+
+      const maxX = Math.max(
+        0,
+        container.offsetWidth - width,
+      );
+
+      const maxY = Math.max(
+        0,
+        container.offsetHeight - height,
+      );
+
+      const x = Math.min(
+        maxX,
+        Math.max(0, field.x + deltaX),
+      );
+
+      const y = Math.min(
+        maxY,
+        Math.max(0, field.y + deltaY),
+      );
+
+      onUpdate(field.id, { x, y });
+    },
+    [
+      field.id,
+      field.x,
+      field.y,
+      field.width,
+      field.height,
+      onUpdate,
+    ],
+  );
+
+  const handlePrecisionPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    deltaX: number,
+    deltaY: number,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    onSelect(field.id);
+
+    const step = event.shiftKey
+      ? PRECISION_FAST_STEP
+      : PRECISION_STEP;
+
+    moveFieldPrecisely(
+      deltaX * step,
+      deltaY * step,
+    );
+  };
+
+  /*
    * Typed signature sizing.
    */
   const typedValue =
@@ -1073,6 +1246,7 @@ export default function SignatureField({
           ? "signature-field-selected"
           : ""
       }`}
+      ref={fieldRef}
       style={{
         left: field.x,
         top: field.y,
@@ -1402,6 +1576,129 @@ export default function SignatureField({
             }
           />
         </>
+      )}
+
+      {selected && isCoarsePointer && (
+        <div
+          className="field-controls field-precision-controller"
+          style={{
+            position: "absolute",
+            left: "clamp(70px, 50%, calc(100% - 70px))",
+            top: precisionAbove
+              ? `-${PRECISION_CONTROLLER_HEIGHT + PRECISION_CONTROLLER_MARGIN}px`
+              : `calc(100% + ${PRECISION_CONTROLLER_MARGIN}px)`,
+            transform: "translateX(-50%)",
+            width: "168px",
+            height: `${PRECISION_CONTROLLER_HEIGHT}px`,
+            zIndex: 7000,
+            pointerEvents: "none",
+          }}
+          onPointerDown={(event) =>
+            event.stopPropagation()
+          }
+          onClick={(event) =>
+            event.stopPropagation()
+          }
+        >
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gridTemplateRows: "1fr 1fr",
+              gap: "4px",
+              padding: "4px",
+              boxSizing: "border-box",
+              pointerEvents: "auto",
+              touchAction: "none",
+            }}
+          >
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move signature up"
+              title="Move up 2px. Hold Shift for 10px."
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  -1,
+                )
+              }
+            >
+              ↑
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move signature left"
+              title="Move left 2px. Hold Shift for 10px."
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  -1,
+                  0,
+                )
+              }
+            >
+              ←
+            </button>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "11px",
+                fontWeight: 700,
+                lineHeight: 1,
+                userSelect: "none",
+                whiteSpace: "nowrap",
+              }}
+              aria-hidden="true"
+            >
+              {Math.round(field.x)}, {Math.round(field.y)}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Move signature right"
+              title="Move right 2px. Hold Shift for 10px."
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  1,
+                  0,
+                )
+              }
+            >
+              →
+            </button>
+
+            <span aria-hidden="true" />
+
+            <button
+              type="button"
+              aria-label="Move signature down"
+              title="Move down 2px. Hold Shift for 10px."
+              onPointerDown={(event) =>
+                handlePrecisionPointerDown(
+                  event,
+                  0,
+                  1,
+                )
+              }
+            >
+              ↓
+            </button>
+
+            <span aria-hidden="true" />
+          </div>
+        </div>
       )}
     </div>
   );

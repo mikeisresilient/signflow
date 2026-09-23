@@ -1740,7 +1740,14 @@ function App() {
                 <span>SignFlow</span>
               </div>
 
-              <label className="signflow-dashboard-new">
+              <label
+                className="signflow-dashboard-new"
+                style={{
+                  minHeight: 44,
+                  boxSizing: "border-box",
+                  touchAction: "manipulation",
+                }}
+              >
                 <Upload size={17} />
                 <span>New document</span>
                 <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} hidden />
@@ -1754,7 +1761,14 @@ function App() {
 
             <div className="signflow-dashboard-toolbar">
               <input className="signflow-dashboard-search" type="search" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search documents..." aria-label="Search documents" />
-              <label className="signflow-dashboard-upload">
+              <label
+                className="signflow-dashboard-upload"
+                style={{
+                  minHeight: 44,
+                  boxSizing: "border-box",
+                  touchAction: "manipulation",
+                }}
+              >
                 <Upload size={17} />
                 Upload
                 <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" onChange={handleUpload} hidden />
@@ -1770,7 +1784,15 @@ function App() {
                   const modified = new Date(document.savedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
                   return (
-                    <article className="signflow-document-card" key={document.id}>
+                    <article
+                      className="signflow-document-card"
+                      key={document.id}
+                      style={{
+                        minWidth: 0,
+                        overflow: "hidden",
+                        boxSizing: "border-box",
+                      }}
+                    >
                       <div className="signflow-document-card-top">
                         <div className="signflow-document-icon"><FileText size={21} /></div>
                         <div className="signflow-document-actions">
@@ -1829,7 +1851,19 @@ function App() {
           TOP BAR
           ================================= */}
 
-      <header className="topbar">
+      <header
+        className="topbar"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 5000,
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          flexShrink: 0,
+          boxSizing: "border-box",
+        }}
+      >
         <div className="topbar-left">
           <button
             type="button"
@@ -1993,7 +2027,18 @@ function App() {
         </div>
       </header>
 
-      <div className="workspace">
+      <div
+        className="workspace"
+        style={{
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          height: "calc(100vh - 64px)",
+          minHeight: 0,
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
         {/* =================================
             LEFT TOOLBAR
             ================================= */}
@@ -2051,7 +2096,16 @@ function App() {
             DOCUMENT CANVAS
             ================================= */}
 
-        <main className="canvas-area">
+        <main
+          className="canvas-area"
+          style={{
+            minWidth: 0,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            boxSizing: "border-box",
+          }}
+        >
           <div
             className="document-page"
             data-signflow-zoom={

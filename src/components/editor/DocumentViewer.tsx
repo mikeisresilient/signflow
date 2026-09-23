@@ -323,6 +323,16 @@ function PdfPage({
       return;
     }
 
+    /*
+     * The PDF pages are scrolled inside SignFlow's own document viewport.
+     * Use that element as the IntersectionObserver root so the page indicator
+     * follows the page actually visible inside the editor, including mobile.
+     */
+    const scrollContainer =
+      pageRef.current?.closest(
+        ".signflow-pdf-scroll",
+      ) as HTMLElement | null;
+
     const observer =
       new IntersectionObserver(
         (entries) => {
@@ -365,6 +375,8 @@ function PdfPage({
           }
         },
         {
+          root: scrollContainer,
+          rootMargin: "0px",
           threshold: [
             0.2,
             0.35,
@@ -1403,16 +1415,25 @@ export default function DocumentViewer({
           width: "100%",
           maxWidth: "100%",
           minWidth: 0,
+          height: "100%",
+          maxHeight: "100%",
           overflowX:
             safeZoom > 1
               ? "auto"
               : "hidden",
-          overflowY:
-            "visible",
+          overflowY: "auto",
           boxSizing:
             "border-box",
           overscrollBehaviorX:
             "contain",
+          overscrollBehaviorY:
+            "contain",
+          WebkitOverflowScrolling:
+            "touch",
+          touchAction:
+            safeZoom > 1
+              ? "pan-x pan-y"
+              : "pan-y",
         }}
       >
         <Document
@@ -1434,6 +1455,14 @@ export default function DocumentViewer({
             );
 
             pageRefs.current.clear();
+
+            requestAnimationFrame(() => {
+              scrollRef.current?.scrollTo({
+                top: 0,
+                left: 0,
+                behavior: "auto",
+              });
+            });
           }}
           onLoadError={(
             error,
@@ -1447,6 +1476,14 @@ export default function DocumentViewer({
             setCurrentPage(1);
             setPageInput("1");
             pageRefs.current.clear();
+
+            requestAnimationFrame(() => {
+              scrollRef.current?.scrollTo({
+                top: 0,
+                left: 0,
+                behavior: "auto",
+              });
+            });
           }}
           loading={
             <div className="pdf-loading">

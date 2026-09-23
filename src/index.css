@@ -3258,3 +3258,246 @@ body {
   touch-action: none !important;
 }
 
+/* =========================================================
+   SIGNFLOW ZOOM PAN — FINAL VIEWER OWNERSHIP
+   =========================================================
+   Each document viewer owns its own zoom/pan area.
+
+   The main canvas remains the vertical application workspace.
+   PDF, image and DOCX viewers provide their own horizontal and
+   vertical scrolling when zoomed so mobile users can move around
+   the uploaded document without moving the application shell.
+   ========================================================= */
+
+/* Keep the application shell locked to the viewport. */
+html,
+body,
+#root,
+.app,
+.workspace {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden !important;
+}
+
+/* The main canvas scrolls vertically. Document viewers own
+   two-axis scrolling when zoomed. */
+.canvas-area {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+
+  overscroll-behavior-x: none !important;
+  overscroll-behavior-y: contain !important;
+
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------------------------------------------------------
+   PDF
+   --------------------------------------------------------- */
+
+/*
+ * DocumentViewer creates .signflow-pdf-scroll specifically for
+ * the PDF viewport. It must be allowed to scroll in both axes.
+ *
+ * Important: do NOT force overflow-y: visible here. The React
+ * component owns vertical scrolling and page navigation depends
+ * on this element being the real scroll container.
+ */
+.signflow-pdf-scroll {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+
+  -webkit-overflow-scrolling: touch;
+
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: contain !important;
+
+  touch-action: pan-x pan-y !important;
+
+  scrollbar-width: thin;
+}
+
+.signflow-pdf-pages {
+  max-width: none !important;
+}
+
+.signflow-pdf-page,
+.signflow-pdf-page-content {
+  box-sizing: border-box;
+}
+
+.signflow-pdf-page-content {
+  max-width: none !important;
+}
+
+/* ---------------------------------------------------------
+   IMAGE
+   --------------------------------------------------------- */
+
+/*
+ * ImageViewer has its own .image-scroll-container.
+ * The outer image document must NOT steal that scrolling.
+ */
+.image-document {
+  width: 100%;
+  max-width: 100% !important;
+  min-width: 0;
+
+  box-sizing: border-box;
+
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+
+  overscroll-behavior-x: none;
+}
+
+/*
+ * Keep the zoomed image larger than the viewport when required.
+ * The component controls the actual 2D scroll behavior.
+ */
+.image-scroll-container {
+  max-width: 100% !important;
+  min-width: 0;
+
+  overflow-x: auto;
+  overflow-y: auto;
+
+  -webkit-overflow-scrolling: touch;
+
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
+
+  touch-action: pan-x pan-y;
+}
+
+.image-page-wrapper {
+  max-width: none !important;
+  flex: 0 0 auto;
+}
+
+.image-document-image {
+  max-width: none;
+}
+
+.image-field-layer {
+  max-width: none !important;
+}
+
+/* ---------------------------------------------------------
+   DOCX
+   --------------------------------------------------------- */
+
+/*
+ * DocxViewer has an internal visual scroll area.
+ * Do not override it with visible overflow from the global CSS.
+ */
+.docx-document {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  box-sizing: border-box;
+
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+}
+
+/*
+ * The direct zoom scroll wrapper inside DocxViewer owns both
+ * horizontal and vertical scrolling.
+ */
+.docx-document > div {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
+  touch-action: pan-x pan-y;
+}
+
+.docx-page {
+  flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------
+   MOBILE / SMALL SCREENS
+   --------------------------------------------------------- */
+
+@media (max-width: 650px) {
+  .canvas-area {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    touch-action: pan-y !important;
+
+    /* Leave room for the bottom tool dock. */
+    padding-bottom: 90px !important;
+  }
+
+  .signflow-pdf-scroll {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    touch-action: pan-x pan-y !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .image-scroll-container,
+  .docx-document > div {
+    touch-action: pan-x pan-y !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Preserve zoomed document dimensions. */
+  .signflow-pdf-page-content,
+  .image-page-wrapper,
+  .docx-page {
+    flex-shrink: 0;
+  }
+}
+
+/* Very small phones still need both-axis document navigation. */
+@media (max-width: 400px) {
+  .canvas-area {
+    touch-action: pan-y !important;
+  }
+
+  .signflow-pdf-scroll,
+  .image-scroll-container,
+  .docx-document > div {
+    touch-action: pan-x pan-y !important;
+  }
+}
+
+/*
+ * Field interactions intentionally take priority over document
+ * panning while the user is dragging or resizing a field.
+ */
+.document-field,
+.signature-field,
+.date-field,
+.checkbox-field,
+.name-field,
+.email-field,
+.field-drag-handle,
+.field-resize-handle,
+.signature-resize-handle,
+.date-resize-handle,
+.checkbox-resize-handle,
+.name-resize-handle,
+.email-resize-handle {
+  touch-action: none !important;
+}
