@@ -394,11 +394,60 @@ const drawWrappedText = (
         horizontalPadding * 2,
     );
 
-  const lineHeight =
-    fontSize * 1.2;
+  /*
+   * Fit the COMPLETE text inside the field.
+   * Never truncate and never add an ellipsis.
+   */
+  const MIN_RENDER_FONT_SIZE = 4;
 
-  const maxLines =
-    Math.max(
+  let fittedFontSize = Math.max(
+    MIN_RENDER_FONT_SIZE,
+    fontSize,
+  );
+
+  let lines = wrapText(
+    text,
+    font,
+    fittedFontSize,
+    contentWidth,
+  );
+
+  let lineHeight =
+    fittedFontSize * 1.2;
+
+  let maxLines = Math.max(
+    1,
+    Math.floor(
+      (safeHeight -
+        verticalPadding * 2) /
+        lineHeight,
+    ),
+  );
+
+  /*
+   * Reduce the font until every wrapped
+   * line can fit vertically.
+   */
+  while (
+    lines.length > maxLines &&
+    fittedFontSize > MIN_RENDER_FONT_SIZE
+  ) {
+    fittedFontSize = Math.max(
+      MIN_RENDER_FONT_SIZE,
+      fittedFontSize - 0.5,
+    );
+
+    lines = wrapText(
+      text,
+      font,
+      fittedFontSize,
+      contentWidth,
+    );
+
+    lineHeight =
+      fittedFontSize * 1.2;
+
+    maxLines = Math.max(
       1,
       Math.floor(
         (safeHeight -
@@ -406,52 +455,13 @@ const drawWrappedText = (
           lineHeight,
       ),
     );
-
-  let lines = wrapText(
-    text,
-    font,
-    fontSize,
-    contentWidth,
-  );
-
-  /*
-   * Prevent text from overflowing the
-   * field vertically.
-   */
-  if (
-    lines.length >
-    maxLines
-  ) {
-    lines =
-      lines.slice(
-        0,
-        maxLines,
-      );
-
-    const lastIndex =
-      lines.length - 1;
-
-    let lastLine =
-      lines[lastIndex];
-
-    while (
-      lastLine.length > 1 &&
-      font.widthOfTextAtSize(
-        `${lastLine}…`,
-        fontSize,
-      ) > contentWidth
-    ) {
-      lastLine =
-        lastLine.slice(
-          0,
-          -1,
-        );
-    }
-
-    lines[lastIndex] =
-      `${lastLine}…`;
   }
 
+  /*
+   * At the minimum font size we still keep
+   * every line. The exporter must never
+   * silently discard user-entered content.
+   */
   const totalTextHeight =
     lines.length *
     lineHeight;
@@ -471,7 +481,7 @@ const drawWrappedText = (
         totalTextHeight
       ) / 2,
     ) -
-    fontSize;
+    fittedFontSize;
 
   lines.forEach(
     (line, index) => {
@@ -487,7 +497,7 @@ const drawWrappedText = (
             index *
               lineHeight,
 
-          size: fontSize,
+          size: fittedFontSize,
 
           font,
 
